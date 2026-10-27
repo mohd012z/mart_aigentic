@@ -4,6 +4,8 @@ import httpx
 from fastapi import FastAPI, Header, HTTPException, Request
 from mart_engine import research
 from telegram_ui import ACTIONS, keyboard, menu_text
+from observability import record, report
+import time
 
 app = FastAPI(title="MART Agentic Research")
 
@@ -46,6 +48,8 @@ async def telegram_webhook(request: Request, x_telegram_bot_api_secret_token: st
     cmd = cmd.split("@", 1)[0].lower()
     if cmd in ("/start", "/help", "/menu"):
         answer = HELP
+    elif cmd in ("/usage", "/quality", "/agentstatus", "/report"):
+        answer = report()
     elif cmd == "/status":
         answer = "Service online. Research provider: " + ("configured" if os.getenv("BRAVE_SEARCH_API_KEY") else "missing")
     elif cmd.lstrip("/") in ACTIONS:
@@ -53,7 +57,13 @@ async def telegram_webhook(request: Request, x_telegram_bot_api_secret_token: st
         if not arg.strip():
             answer = "Use /" + kind + " followed by a product or topic."
         elif kind in ("research", "recommend", "affiliate"):
-            answer = await research(arg.strip())
+            started = time.monotonic()
+            try:
+                answer = await research(arg.strip())
+                record("research", provider="brave", status="ok" if not answer.startswith(("Research unavailable", "Research provider not configured")) else "failed", latency_ms=int((time.monotonic()-started)*1000))
+            except Exception as exc:
+                record("research", provider="brave", status="failed", latency_ms=int((time.monotonic()-started)*1000), error_type=type(exc).__name__)
+                raise
         else:
             answer = create_draft(kind, arg.strip())
     elif cmd in ("/research", "/recommend"):
