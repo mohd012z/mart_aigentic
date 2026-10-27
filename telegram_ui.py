@@ -1,5 +1,7 @@
 """Telegram keyboard and command registry."""
 COMMANDS = [
+    {"command":"campaign","description":"One-click marketing campaign"},
+    {"command":"campaignstatus","description":"Check campaign progress"},
     {"command":"start","description":"Open MART dashboard"},
     {"command":"research","description":"Research market or product"},
     {"command":"recommend","description":"Business opportunity recommendations"},
@@ -12,6 +14,7 @@ COMMANDS = [
     {"command":"help","description":"Show instructions"},
 ]
 ACTIONS = {
+    "campaign": ("🚀 Run Campaign", "Marketing campaign"),
     "research": ("🔎 Research", "Research"),
     "recommend": ("📈 Recommendations", "Recommendations"),
     "marketing": ("📣 Marketing plan", "Marketing plan"),
