@@ -36,4 +36,9 @@ class WorkerTests(unittest.IsolatedAsyncioTestCase):
   with campaigns.conn() as c:
    cols={row[1] for row in c.execute("PRAGMA table_info(campaigns)")}
   self.assertTrue({"attempts","available_at","lease_until","notified"}.issubset(cols))
+ async def test_notification_cycle_failure_does_not_undo_campaign(self):
+  cid=campaigns.create(12,"earbuds")
+  with patch.object(w,"research",AsyncMock(return_value="Research: earbuds")),patch.object(w,"deliver_pending",AsyncMock(side_effect=RuntimeError("offline"))):
+   self.assertTrue(await w.run_once())
+  self.assertEqual(campaigns.get(cid,12)[0],"review")
 if __name__=="__main__":unittest.main()
