@@ -15,6 +15,9 @@ from provider_registry import configured
 log=logging.getLogger(__name__)
 POLL_SECONDS=float(os.getenv("MART_WORKER_POLL_SECONDS","5"))
 MAX_ATTEMPTS=3
+LEASE_SECONDS=90
+HEARTBEAT_SECONDS=20
+JOB_TIMEOUT_SECONDS=300
 
 def migrate():
     with closing(campaigns.conn()) as c:
@@ -30,13 +33,13 @@ def claim():
     with closing(campaigns.conn()) as c:
         c.execute("BEGIN IMMEDIATE")
         row=c.execute("""SELECT id,chat,topic,attempts FROM campaigns
-            WHERE (status='queued' AND available_at<=?)
-            OR (status='running' AND lease_until<=?)
-            ORDER BY rowid LIMIT 1""",(now,now)).fetchone()
+            WHERE attempts<? AND ((status='queued' AND available_at<=?)
+            OR (status='running' AND lease_until<=?))
+            ORDER BY rowid LIMIT 1""",(MAX_ATTEMPTS,now,now)).fetchone()
         if row:
             owner=uuid.uuid4().hex
             c.execute("""UPDATE campaigns SET status='running',attempts=attempts+1,
-                lease_until=?,lease_owner=? WHERE id=?""",(now+90,owner,row[0]))
+                lease_until=?,lease_owner=? WHERE id=?""",(now+LEASE_SECONDS,owner,row[0]))
             row=(*row,owner)
         c.commit()
         return row
@@ -55,6 +58,26 @@ def complete(cid,output,success=True,retry=False,owner=None):
                 AND lease_owner=?""",("review" if success else "failed",output,cid,owner))
         c.commit()
         return cursor.rowcount==1
+
+def renew_lease(cid,owner):
+    """Renew only the active owner's lease. Stale workers cannot renew."""
+    now=int(time.time())
+    with closing(campaigns.conn()) as c:
+        cursor=c.execute("""UPDATE campaigns SET lease_until=?
+            WHERE id=? AND status='running' AND lease_owner=?
+            AND lease_until>?""",(now+LEASE_SECONDS,cid,owner,now))
+        c.commit()
+        return cursor.rowcount==1
+
+async def lease_heartbeat(cid,owner,stop):
+    while not stop.is_set():
+        try:
+            await asyncio.wait_for(stop.wait(),timeout=HEARTBEAT_SECONDS)
+        except asyncio.TimeoutError:
+            if not renew_lease(cid,owner):
+                log.warning("Lost lease for campaign %s",cid)
+                stop.set()
+                return
 
 async def notify(chat,text):
     token=os.getenv("TELEGRAM_BOT_TOKEN")
@@ -84,8 +107,10 @@ async def run_once():
     job=claim()
     if not job:return False
     cid,chat,topic,attempts,owner=job
+    stop=asyncio.Event()
+    heartbeat=asyncio.create_task(lease_heartbeat(cid,owner,stop))
     try:
-        evidence=await research(topic)
+        evidence=await asyncio.wait_for(research(topic),timeout=JOB_TIMEOUT_SECONDS)
         if evidence.startswith(("Research provider not configured","Research unavailable","No verifiable sources")):
             raise RuntimeError(evidence[:150])
         output=(f"CAMPAIGN DRAFT: {topic}\n\nEVIDENCE\n{evidence[:1800]}\n\n"
@@ -99,15 +124,20 @@ async def run_once():
                       "evidence. Never invent prices, testimonials or commissions. Never claim "
                       "publication.\nTopic: " + topic + "\nEvidence:\n" + evidence[:4000])
             try:
-                generated = await generate(prompt)
+                generated = await asyncio.wait_for(generate(prompt),timeout=JOB_TIMEOUT_SECONDS)
                 output = ("AI CAMPAIGN DRAFT: " + topic + "\n\n" + generated[:3200]
                           + "\n\nHuman review required. Nothing published.")
             except GatewayError:
                 log.exception("AI generation failed; using deterministic draft")
-        complete(cid,output,owner=owner)
+        if not stop.is_set() and not complete(cid,output,owner=owner):
+            log.warning("Campaign %s result discarded: lease ownership changed",cid)
     except Exception as exc:
         log.exception("Campaign %s failed",cid)
-        complete(cid,f"{type(exc).__name__}: {str(exc)[:180]}",False,retry=attempts+1<MAX_ATTEMPTS,owner=owner)
+        if not stop.is_set():
+            complete(cid,f"{type(exc).__name__}: {str(exc)[:180]}",False,retry=attempts+1<MAX_ATTEMPTS,owner=owner)
+    finally:
+        stop.set()
+        await heartbeat
     try:
         await deliver_pending()
     except Exception:
