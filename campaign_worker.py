@@ -7,6 +7,8 @@ import time
 import httpx
 import campaigns
 from mart_engine import research
+from ai_gateway import generate, GatewayError
+from provider_registry import configured
 
 log=logging.getLogger(__name__)
 POLL_SECONDS=float(os.getenv("MART_WORKER_POLL_SECONDS","5"))
@@ -81,6 +83,17 @@ async def run_once():
                 f"SOCIAL: Three considerations when choosing {topic}.\n\n"
                 "VIDEO: 0-3s hook; 3-15s problem; 15-30s comparison; 30-35s CTA.\n"
                 "All claims, licensed assets and affiliate disclosures require review.")
+        if configured("openai_compatible"):
+            prompt = ("Produce a marketing draft with audience hypotheses, ad copy, a social post, "
+                      "a short-video script and a list of unverified claims. Use only the supplied "
+                      "evidence. Never invent prices, testimonials or commissions. Never claim "
+                      "publication.\nTopic: " + topic + "\nEvidence:\n" + evidence[:4000])
+            try:
+                generated = await generate(prompt)
+                output = ("AI CAMPAIGN DRAFT: " + topic + "\n\n" + generated[:3200]
+                          + "\n\nHuman review required. Nothing published.")
+            except GatewayError:
+                log.exception("AI generation failed; using deterministic draft")
         complete(cid,output)
     except Exception as exc:
         log.exception("Campaign %s failed",cid)
