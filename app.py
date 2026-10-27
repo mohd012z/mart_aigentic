@@ -6,6 +6,7 @@ from mart_engine import research
 from telegram_ui import ACTIONS, keyboard, menu_text
 from observability import record, report
 import campaigns
+from voice_intake import transcribe_telegram_voice, parse_command, VoiceError
 import time
 
 app = FastAPI(title="MART Agentic Research")
@@ -45,6 +46,19 @@ async def telegram_webhook(request: Request, x_telegram_bot_api_secret_token: st
     message = update.get("message") or {}
     chat_id = (message.get("chat") or {}).get("id")
     content = message.get("text", "").strip()
+    voice = message.get("voice")
+    if voice and chat_id:
+        try:
+            transcript = await transcribe_telegram_voice(voice.get("file_id"), voice.get("duration"))
+            action, topic = parse_command(transcript)
+            if action == "confirm":
+                await send_message(chat_id, "Heard: " + transcript[:500] + "\nCommand not recognized. Send /research <topic> or /campaign <topic>.", menu=True)
+                return {"ok": True}
+            content = "/" + action + " " + topic
+        except VoiceError:
+            await send_message(chat_id, "Voice transcription unavailable. Please send a text command.", menu=True)
+            return {"ok": True}
+
     if not chat_id or not content:
         return {"ok": True}
     cmd, _, arg = content.partition(" ")
