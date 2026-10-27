@@ -9,7 +9,8 @@ class VoiceError(Exception):pass
 def parse_command(transcript):
     if not isinstance(transcript,str):raise VoiceError("Invalid transcript")
     t=" ".join(transcript.strip().split())
-    if len(t)>500:raise VoiceError("Voice instruction too long")
+    if not t:raise VoiceError("Empty voice instruction")
+    if len(t)>300:raise VoiceError("Voice instruction too long")
     m=re.match(r"^(?:research|search|find|cari|selidik)\s+(.+)$",t,re.I)
     if m:return ("research",m.group(1))
     m=re.match(r"^(?:create campaign|run campaign|campaign|buat kempen|cipta kempen)\s+(.+)$",t,re.I)
@@ -38,6 +39,7 @@ async def transcribe_telegram_voice(file_id,duration=None,client=None):
         audio=await client.get("https://api.telegram.org/file/bot"+bot+"/"+path)
         audio.raise_for_status()
         if len(audio.content)>MAX_BYTES:raise VoiceError("Voice message too large")
+        if not audio.content:raise VoiceError("Empty audio")
         result=await client.post("https://api.openai.com/v1/audio/transcriptions",
             headers={"Authorization":"Bearer "+key},
             data={"model":os.getenv("MART_TRANSCRIBE_MODEL","whisper-1")},
@@ -45,7 +47,8 @@ async def transcribe_telegram_voice(file_id,duration=None,client=None):
         result.raise_for_status()
         transcript=result.json().get("text")
         if not isinstance(transcript,str) or not transcript.strip():raise VoiceError("Empty transcription")
-        return transcript[:1000]
+        if len(transcript)>300:raise VoiceError("Transcription exceeds command limit")
+        return transcript
     except (httpx.HTTPError,KeyError,TypeError,ValueError) as exc:
         raise VoiceError("Voice service unavailable") from exc
     finally:
