@@ -57,4 +57,11 @@ class WorkerTests(unittest.IsolatedAsyncioTestCase):
   cid=campaigns.create(12,"earbuds")
   w.claim()
   with self.assertRaises(ValueError):w.complete(cid,"unsafe")
+ async def test_multiple_claims_have_distinct_jobs(self):
+  first=campaigns.create(12,"headphones")
+  second=campaigns.create(12,"chargers")
+  one=w.claim()
+  two=w.claim()
+  self.assertEqual({one[0],two[0]},{first,second})
+  self.assertNotEqual(one[4],two[4])
 if __name__=="__main__":unittest.main()
