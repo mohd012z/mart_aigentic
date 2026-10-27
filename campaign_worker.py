@@ -4,6 +4,7 @@ import logging
 import os
 import sqlite3
 import time
+from contextlib import closing
 import httpx
 import campaigns
 from mart_engine import research
@@ -15,7 +16,8 @@ POLL_SECONDS=float(os.getenv("MART_WORKER_POLL_SECONDS","5"))
 MAX_ATTEMPTS=3
 
 def migrate():
-    with campaigns.conn() as c:
+    with closing(campaigns.conn()) as c:
+        c.execute("BEGIN IMMEDIATE")
         cols={r[1] for r in c.execute("PRAGMA table_info(campaigns)")}
         for col,typ in (("attempts","INTEGER NOT NULL DEFAULT 0"),("available_at","INTEGER NOT NULL DEFAULT 0"),("lease_until","INTEGER NOT NULL DEFAULT 0"),("notified","INTEGER NOT NULL DEFAULT 0")):
             if col not in cols:c.execute(f"ALTER TABLE campaigns ADD COLUMN {col} {typ}")
