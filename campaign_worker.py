@@ -4,6 +4,7 @@ import logging
 import os
 import sqlite3
 import time
+import uuid
 from contextlib import closing
 import httpx
 import campaigns
@@ -19,34 +20,41 @@ def migrate():
     with closing(campaigns.conn()) as c:
         c.execute("BEGIN IMMEDIATE")
         cols={r[1] for r in c.execute("PRAGMA table_info(campaigns)")}
-        for col,typ in (("attempts","INTEGER NOT NULL DEFAULT 0"),("available_at","INTEGER NOT NULL DEFAULT 0"),("lease_until","INTEGER NOT NULL DEFAULT 0"),("notified","INTEGER NOT NULL DEFAULT 0")):
+        for col,typ in (("attempts","INTEGER NOT NULL DEFAULT 0"),("available_at","INTEGER NOT NULL DEFAULT 0"),("lease_until","INTEGER NOT NULL DEFAULT 0"),("notified","INTEGER NOT NULL DEFAULT 0"),("lease_owner","TEXT NOT NULL DEFAULT ''")):
             if col not in cols:c.execute(f"ALTER TABLE campaigns ADD COLUMN {col} {typ}")
         c.commit()
 
 def claim():
     migrate()
     now=int(time.time())
-    with campaigns.conn() as c:
+    with closing(campaigns.conn()) as c:
         c.execute("BEGIN IMMEDIATE")
         row=c.execute("""SELECT id,chat,topic,attempts FROM campaigns
             WHERE (status='queued' AND available_at<=?)
             OR (status='running' AND lease_until<=?)
             ORDER BY rowid LIMIT 1""",(now,now)).fetchone()
         if row:
+            owner=uuid.uuid4().hex
             c.execute("""UPDATE campaigns SET status='running',attempts=attempts+1,
-                lease_until=? WHERE id=?""",(now+90,row[0]))
+                lease_until=?,lease_owner=? WHERE id=?""",(now+90,owner,row[0]))
+            row=(*row,owner)
         c.commit()
         return row
 
-def complete(cid,output,success=True,retry=False):
-    with campaigns.conn() as c:
+def complete(cid,output,success=True,retry=False,owner=None):
+    if not owner:
+        raise ValueError("A valid lease owner is required")
+    with closing(campaigns.conn()) as c:
         if retry:
-            c.execute("""UPDATE campaigns SET status='queued',available_at=?,
-                lease_until=0,output=? WHERE id=?""",(int(time.time())+30,output,cid))
+            cursor=c.execute("""UPDATE campaigns SET status='queued',available_at=?,
+                lease_until=0,lease_owner='',output=? WHERE id=? AND status='running'
+                AND lease_owner=?""",(int(time.time())+30,output,cid,owner))
         else:
-            c.execute("""UPDATE campaigns SET status=?,lease_until=0,output=? WHERE id=?""",
-                      ("review" if success else "failed",output,cid))
+            cursor=c.execute("""UPDATE campaigns SET status=?,lease_until=0,
+                lease_owner='',output=? WHERE id=? AND status='running'
+                AND lease_owner=?""",("review" if success else "failed",output,cid,owner))
         c.commit()
+        return cursor.rowcount==1
 
 async def notify(chat,text):
     token=os.getenv("TELEGRAM_BOT_TOKEN")
@@ -75,7 +83,7 @@ async def deliver_pending():
 async def run_once():
     job=claim()
     if not job:return False
-    cid,chat,topic,attempts=job
+    cid,chat,topic,attempts,owner=job
     try:
         evidence=await research(topic)
         if evidence.startswith(("Research provider not configured","Research unavailable","No verifiable sources")):
@@ -96,10 +104,10 @@ async def run_once():
                           + "\n\nHuman review required. Nothing published.")
             except GatewayError:
                 log.exception("AI generation failed; using deterministic draft")
-        complete(cid,output)
+        complete(cid,output,owner=owner)
     except Exception as exc:
         log.exception("Campaign %s failed",cid)
-        complete(cid,f"{type(exc).__name__}: {str(exc)[:180]}",False,retry=attempts+1<MAX_ATTEMPTS)
+        complete(cid,f"{type(exc).__name__}: {str(exc)[:180]}",False,retry=attempts+1<MAX_ATTEMPTS,owner=owner)
     try:
         await deliver_pending()
     except Exception:
