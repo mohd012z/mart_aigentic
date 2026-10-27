@@ -41,4 +41,20 @@ class WorkerTests(unittest.IsolatedAsyncioTestCase):
   with patch.object(w,"research",AsyncMock(return_value="Research: earbuds")),patch.object(w,"deliver_pending",AsyncMock(side_effect=RuntimeError("offline"))):
    self.assertTrue(await w.run_once())
   self.assertEqual(campaigns.get(cid,12)[0],"review")
+ async def test_stale_lease_cannot_overwrite_reclaimed_job(self):
+  cid=campaigns.create(12,"earbuds")
+  old=w.claim()
+  self.assertIsNotNone(old)
+  with campaigns.conn() as c:
+   c.execute("UPDATE campaigns SET lease_until=0 WHERE id=?",(cid,))
+   c.commit()
+  new=w.claim()
+  self.assertNotEqual(old[4],new[4])
+  self.assertFalse(w.complete(cid,"stale output",owner=old[4]))
+  self.assertTrue(w.complete(cid,"fresh output",owner=new[4]))
+  self.assertEqual(campaigns.get(cid,12),("review","fresh output"))
+ async def test_completion_requires_owner(self):
+  cid=campaigns.create(12,"earbuds")
+  w.claim()
+  with self.assertRaises(ValueError):w.complete(cid,"unsafe")
 if __name__=="__main__":unittest.main()
