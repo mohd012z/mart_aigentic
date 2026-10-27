@@ -64,4 +64,24 @@ class WorkerTests(unittest.IsolatedAsyncioTestCase):
   two=w.claim()
   self.assertEqual({one[0],two[0]},{first,second})
   self.assertNotEqual(one[4],two[4])
+ async def test_lease_renewal_only_current_owner(self):
+  cid=campaigns.create(12,"earbuds")
+  first=w.claim()
+  self.assertTrue(w.renew_lease(cid,first[4]))
+  self.assertFalse(w.renew_lease(cid,"wrong-owner"))
+  with campaigns.conn() as c:
+   c.execute("UPDATE campaigns SET lease_until=0 WHERE id=?",(cid,))
+   c.commit()
+  second=w.claim()
+  self.assertNotEqual(first[4],second[4])
+  self.assertFalse(w.renew_lease(cid,first[4]))
+  self.assertTrue(w.renew_lease(cid,second[4]))
+ async def test_timeout_requeues_job(self):
+  import asyncio
+  cid=campaigns.create(12,"earbuds")
+  async def slow(_):
+   await asyncio.sleep(1)
+  with patch.object(w,"research",side_effect=slow),patch.object(w,"JOB_TIMEOUT_SECONDS",0.01),patch.object(w,"notify",AsyncMock()):
+   self.assertTrue(await w.run_once())
+  self.assertEqual(campaigns.get(cid,12)[0],"queued")
 if __name__=="__main__":unittest.main()
