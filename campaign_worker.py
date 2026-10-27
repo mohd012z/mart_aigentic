@@ -100,7 +100,10 @@ async def run_once():
     except Exception as exc:
         log.exception("Campaign %s failed",cid)
         complete(cid,f"{type(exc).__name__}: {str(exc)[:180]}",False,retry=attempts+1<MAX_ATTEMPTS)
-    await deliver_pending()
+    try:
+        await deliver_pending()
+    except Exception:
+        log.exception('Notification delivery cycle failed after campaign completion')
     return True
 
 async def serve():
