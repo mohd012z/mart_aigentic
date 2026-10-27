@@ -114,15 +114,31 @@ async def run_once():
         log.exception('Notification delivery cycle failed after campaign completion')
     return True
 
-async def serve():
-    logging.basicConfig(level=logging.INFO)
+async def worker_loop(worker_number):
     while True:
         try:
             await run_once()
+        except Exception:
+            log.exception("Worker %s cycle failed",worker_number)
+        await asyncio.sleep(max(POLL_SECONDS,1))
+
+async def notification_loop():
+    while True:
+        try:
             await deliver_pending()
         except Exception:
-            log.exception("Worker cycle failed")
+            log.exception("Notification cycle failed")
         await asyncio.sleep(max(POLL_SECONDS,1))
+
+async def serve():
+    logging.basicConfig(level=logging.INFO)
+    try:
+        count=int(os.getenv("MART_WORKER_COUNT","2"))
+    except ValueError as exc:
+        raise ValueError("MART_WORKER_COUNT must be an integer") from exc
+    if not 1<=count<=4:
+        raise ValueError("MART_WORKER_COUNT must be between 1 and 4")
+    await asyncio.gather(*(worker_loop(i) for i in range(count)),notification_loop())
 
 if __name__=="__main__":
     asyncio.run(serve())
