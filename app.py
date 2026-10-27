@@ -5,6 +5,7 @@ from fastapi import FastAPI, Header, HTTPException, Request
 from mart_engine import research
 from telegram_ui import ACTIONS, keyboard, menu_text
 from observability import record, report
+import campaigns
 import time
 
 app = FastAPI(title="MART Agentic Research")
@@ -35,6 +36,8 @@ async def telegram_webhook(request: Request, x_telegram_bot_api_secret_token: st
     if not secret or not hmac.compare_digest(x_telegram_bot_api_secret_token or "", secret):
         raise HTTPException(status_code=403, detail="Forbidden")
     update = await request.json()
+    if "update_id" in update and not campaigns.accept_update(update["update_id"]):
+        return {"ok": True}
     callback = update.get("callback_query")
     if callback:
         await answer_callback(callback)
@@ -46,7 +49,20 @@ async def telegram_webhook(request: Request, x_telegram_bot_api_secret_token: st
         return {"ok": True}
     cmd, _, arg = content.partition(" ")
     cmd = cmd.split("@", 1)[0].lower()
-    if cmd in ("/start", "/help", "/menu"):
+    if cmd == "/campaign":
+        if arg.strip():
+            cid = campaigns.create(chat_id, arg.strip())
+            answer = f"Campaign queued: {cid}. Use /campaignstatus {cid} to check. Publishing requires approval."
+        else:
+            campaigns.select(chat_id, message.get("from", {}).get("id"), "campaign")
+            answer = "Send the product or business topic to start a campaign."
+    elif cmd == "/campaignstatus":
+        row = campaigns.get(arg.strip(), chat_id)
+        answer = f"Campaign {arg.strip()}: {row[0]}\\n{row[1][:3200]}" if row else "Campaign not found."
+    elif not content.startswith("/") and campaigns.consume(chat_id, message.get("from", {}).get("id")) == "campaign":
+        cid = campaigns.create(chat_id, content)
+        answer = f"Campaign queued: {cid}. Use /campaignstatus {cid} to check."
+    elif cmd in ("/start", "/help", "/menu"):
         answer = HELP
     elif cmd in ("/usage", "/quality", "/agentstatus", "/report"):
         answer = report()
@@ -84,7 +100,11 @@ async def answer_callback(callback):
         r = await client.post(f"https://api.telegram.org/bot{token}/answerCallbackQuery", json={"callback_query_id": callback["id"]})
         r.raise_for_status()
     if chat_id:
-        if kind in ACTIONS:
+        if kind == "campaign":
+            user_id = (callback.get("from") or {}).get("id")
+            campaigns.select(chat_id, user_id, "campaign")
+            await send_message(chat_id, "Send a product or business topic to create a campaign.", menu=True)
+        elif kind in ACTIONS:
             await send_message(chat_id, f"Selected: {ACTIONS[kind][0]}\nEnter /{kind} followed by your topic.", menu=True)
         else:
             await send_message(chat_id, menu_text(), menu=True)
