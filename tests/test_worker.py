@@ -30,4 +30,10 @@ class WorkerTests(unittest.IsolatedAsyncioTestCase):
    await w.run_once()
    await w.deliver_pending()
    self.assertEqual(notify.await_count,1)
+ async def test_migration_idempotent(self):
+  w.migrate()
+  w.migrate()
+  with campaigns.conn() as c:
+   cols={row[1] for row in c.execute("PRAGMA table_info(campaigns)")}
+  self.assertTrue({"attempts","available_at","lease_until","notified"}.issubset(cols))
 if __name__=="__main__":unittest.main()
