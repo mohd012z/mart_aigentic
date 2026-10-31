@@ -7,7 +7,9 @@ export default {
   if(new URL(request.url).pathname!=="/telegram/webhook")return json({error:"not_found"},404);
   if(request.method!=="POST")return json({error:"method_not_allowed"},405);
   if(!env.TELEGRAM_WEBHOOK_SECRET||!equal(request.headers.get("X-Telegram-Bot-Api-Secret-Token")||"",env.TELEGRAM_WEBHOOK_SECRET))return json({error:"forbidden"},403);
-  if(Number(request.headers.get("content-length")||0)>65536)return json({error:"too_large"},413);
+  const declared=request.headers.get("content-length");
+  if(declared!==null && (!/^\d+$/.test(declared) || !Number.isSafeInteger(Number(declared))))return json({error:"invalid_content_length"},400);
+  if(declared!==null && Number(declared)>65536)return json({error:"too_large"},413);
   let update;try{const body=await request.text();if(bytes(body).length>65536)return json({error:"too_large"},413);update=JSON.parse(body)}catch{return json({error:"invalid_json"},400)}
   if(!Number.isSafeInteger(update?.update_id)||update.update_id<0)return json({error:"invalid_update_id"},400);
   try{
