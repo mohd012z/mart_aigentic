@@ -34,3 +34,31 @@ def menu_text():
     return ("🚀 MART Agentic Research & Marketing Studio\n\n"
             "Choose a tool below. Then send your business, product, niche or campaign topic.\n"
             "Research requires a configured search provider. Drafts are suggestions, not published ads.")
+
+# Commerce navigation is isolated from existing research menu.
+COMMERCE_PAGES = {
+    "home": [("🛍 Shopee", "shopee"), ("📘 Facebook", "facebook"),
+             ("📸 Instagram", "instagram"), ("🧵 Threads", "threads"),
+             ("🎵 TikTok", "tiktok"), ("🛒 TikTok Shop", "tiktok_shop"),
+             ("📊 Connections", "connections"), ("❓ Guide", "guide")],
+}
+def commerce_keyboard(page="home"):
+    if page == "home":
+        items = COMMERCE_PAGES["home"]
+        rows = [[{"text": title, "callback_data": "commerce:" + code}
+                 for title, code in items[i:i+2]] for i in range(0, len(items), 2)]
+    else:
+        rows = [[{"text": "✍️ Create draft", "callback_data": "commerce:draft:" + page}]]
+    rows.append([{"text": "🏠 Commerce home", "callback_data": "commerce:home"}])
+    return {"inline_keyboard": rows}
+def commerce_page(page):
+    from social_agent import PLATFORMS
+    if page == "home":
+        return "🧠 MART AI Commerce Studio\\nSelect a platform below. Drafts only; no publishing."
+    if page == "connections":
+        return "🔒 Connections: no social or seller API accounts connected. Official OAuth is required."
+    if page == "guide":
+        return "Select a platform, then Create draft. Send a product name in this private chat. Publishing is disabled."
+    if page in PLATFORMS:
+        return f"📣 {page.replace('_', ' ').title()}\\nDraft assistant ready. Publishing unavailable."
+    raise ValueError("Unknown commerce page")
