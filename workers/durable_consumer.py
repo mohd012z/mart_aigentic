@@ -34,8 +34,8 @@ async def claim(db, now=None, worker_id=None):
         lease_until=?1, worker_id=?2, updated_at=?3
       WHERE update_id=(
         SELECT update_id FROM telegram_updates
-        WHERE (status='pending' AND next_attempt_at<=?3)
-           OR (status='processing' AND lease_until<=?3)
+        WHERE attempts<?4 AND ((status='pending' AND next_attempt_at<=?3)
+           OR (status='processing' AND lease_until<=?3))
         ORDER BY created_at,update_id LIMIT 1
       )
       AND attempts<?4
@@ -47,7 +47,7 @@ async def complete(db, row, now=None):
     now = int(time.time()) if now is None else now
     return await db.query("""UPDATE telegram_updates SET status='completed',
       lease_until=NULL,worker_id=NULL,updated_at=?3
-      WHERE update_id=?1 AND worker_id=?2 AND status='processing'
+      WHERE update_id=?1 AND worker_id=?2 AND status='processing' AND lease_until>=?3
       RETURNING update_id""", (row["update_id"], row["worker_id"], now))
 
 async def fail(db, row, code="processing_failed", now=None):
@@ -57,7 +57,7 @@ async def fail(db, row, code="processing_failed", now=None):
     delay = min(3600, 2 ** min(attempts, 10))
     return await db.query("""UPDATE telegram_updates SET status=?3,
       next_attempt_at=?4,lease_until=NULL,worker_id=NULL,last_error_code=?5,
-      updated_at=?6 WHERE update_id=?1 AND worker_id=?2 AND status='processing'
+      updated_at=?6 WHERE update_id=?1 AND worker_id=?2 AND status='processing' AND lease_until>=?6
       RETURNING update_id""", (row["update_id"], row["worker_id"],
           "dead" if terminal else "pending", now + delay, code[:64], now))
 
