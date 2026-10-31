@@ -13,7 +13,7 @@ class TransactionTests(unittest.TestCase):
  def test_atomic_replay(self):
   payload={'chat_id':12,'text':'Hello'}
   self.assertTrue(stage_command(self.conn,1,12,'sendMessage',payload,owner='owner',now=100))
-  self.assertFalse(stage_command(self.conn,1,12,'sendMessage',payload))
+  self.assertFalse(stage_command(self.conn,1,12,'sendMessage',payload,owner='owner',now=100))
   self.assertEqual(self.conn.execute('SELECT count(*) FROM telegram_outbox').fetchone()[0],1)
   self.assertEqual(self.conn.execute('SELECT status FROM telegram_updates').fetchone()[0],'completed')
  def test_stale_owner_cannot_stage(self):
