@@ -11,6 +11,11 @@ def conn():
 def accept_update(uid):
     with closing(conn()) as c:
         r=c.execute("INSERT OR IGNORE INTO updates VALUES(?)",(uid,));c.commit();return r.rowcount==1
+def release_update(uid):
+    """Permit Telegram to retry an update after processing fails."""
+    with closing(conn()) as c:
+        c.execute("DELETE FROM updates WHERE id=?", (uid,))
+        c.commit()
 def select(chat,user,action):
     with closing(conn()) as c:
         c.execute("INSERT OR REPLACE INTO sessions VALUES(?,?,?)",(chat,user,action));c.commit()
