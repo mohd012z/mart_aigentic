@@ -129,7 +129,13 @@ async def answer_callback(callback):
         r.raise_for_status()
     if chat_id:
         if kind == "commerce":
-            await commerce_callback({**callback, "data": "commerce:home"})
+            chat = (callback.get("message") or {}).get("chat") or {}
+            uid = str((callback.get("from") or {}).get("id", ""))
+            allowed = {v.strip() for v in os.getenv("MART_COMMERCE_ALLOWED_USER_IDS", "").split(",") if v.strip()}
+            if os.getenv("MART_COMMERCE_ENABLED") == "1" and chat.get("type") == "private" and uid in allowed:
+                await send_message(chat_id, commerce_page("home"), reply_markup=commerce_keyboard())
+            else:
+                await send_message(chat_id, "Commerce access denied or disabled.")
         elif kind == "campaign":
             user_id = (callback.get("from") or {}).get("id")
             campaigns.select(chat_id, user_id, "campaign")
