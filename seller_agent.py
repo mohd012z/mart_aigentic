@@ -41,7 +41,7 @@ def parse_products(data: bytes):
             price = Decimal((row.get(selected["price"]) or "").strip())
         except (ValueError, InvalidOperation) as exc:
             raise ValueError("Invalid stock or price for product: " + name) from exc
-        if stock < 0 or price < 0 or not price.is_finite():
+        if not price.is_finite() or stock < 0 or price < 0:
             raise ValueError("Negative or nonfinite values for product: " + name)
         products.append({"name": name, "stock": stock, "price": price})
     return products
