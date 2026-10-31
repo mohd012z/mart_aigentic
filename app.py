@@ -33,6 +33,22 @@ async def health():
 
 @app.post("/telegram/webhook")
 async def telegram_webhook(request: Request, x_telegram_bot_api_secret_token: str | None = Header(default=None)):
+    """Release update claim on failure so Telegram can retry."""
+    try:
+        return await _telegram_webhook_impl(request, x_telegram_bot_api_secret_token)
+    except Exception:
+        import hmac
+        secret = os.getenv("TELEGRAM_WEBHOOK_SECRET")
+        if secret and hmac.compare_digest(x_telegram_bot_api_secret_token or "", secret):
+            try:
+                payload = await request.json()
+                if isinstance(payload, dict) and isinstance(payload.get("update_id"), int):
+                    campaigns.release_update(payload["update_id"])
+            except (ValueError, TypeError, OSError):
+                pass
+        raise
+
+async def _telegram_webhook_impl(request: Request, x_telegram_bot_api_secret_token: str | None):
     import hmac
     secret = os.getenv("TELEGRAM_WEBHOOK_SECRET")
     if not secret or not hmac.compare_digest(x_telegram_bot_api_secret_token or "", secret):
