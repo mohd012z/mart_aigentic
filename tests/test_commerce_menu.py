@@ -18,6 +18,16 @@ class CommerceMenuTests(unittest.TestCase):
                 for button in row:
                     self.assertLessEqual(len(button["callback_data"].encode("utf-8")), 64)
 
+    def test_main_menu_exposes_commerce(self):
+        from telegram_ui import keyboard
+        callbacks = [b["callback_data"] for row in keyboard()["inline_keyboard"] for b in row]
+        self.assertIn("action:commerce", callbacks)
+
+    def test_info_pages_have_no_draft_button(self):
+        for page in ("connections", "guide"):
+            callbacks = [b["callback_data"] for row in commerce_keyboard(page)["inline_keyboard"] for b in row]
+            self.assertEqual(callbacks, ["commerce:home"])
+
     def test_bad_page_rejected(self):
         with self.assertRaises(ValueError):
             commerce_page("unknown")
