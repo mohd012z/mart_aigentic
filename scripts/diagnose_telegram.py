@@ -15,7 +15,7 @@ def summarize(method, payload):
         return {"method": method, "ok": True, "webhook_configured": bool(data.get("url")),
                 "pending_update_count": data.get("pending_update_count", 0),
                 "last_error_date": data.get("last_error_date"),
-                "last_error_message": data.get("last_error_message"),
+                "has_delivery_error": bool(data.get("last_error_message")),
                 "allowed_updates": data.get("allowed_updates")}
     return {"method": method, "ok": True, "commands": [x.get("command") for x in data]}
 
