@@ -11,6 +11,12 @@ class FakeDB:
   return [{"update_id":params[0]}]
 
 class ConsumerTests(unittest.IsolatedAsyncioTestCase):
+ async def test_claim_filters_exhausted_rows_before_ordering(self):
+  db=FakeDB();await claim(db,now=100)
+  self.assertIn("WHERE attempts<?4 AND",db.calls[0][0])
+ async def test_completion_requires_current_lease(self):
+  db=FakeDB();await complete(db,{"update_id":1,"worker_id":"a"},now=100)
+  self.assertIn("lease_until>=?3",db.calls[0][0])
  async def test_empty_queue(self):
   self.assertIsNone(await claim(FakeDB(),now=100))
  async def test_claim_sets_lease(self):
