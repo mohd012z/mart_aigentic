@@ -57,5 +57,26 @@ class RecoveryTests(unittest.TestCase):
   ingest(self.db,{'update_id':300,'callback_query':{'id':'cb'}})
   self.assertEqual(process_once(self.db,now=100,owner='a'),'completed')
   self.assertEqual(self.db.execute('SELECT method FROM telegram_outbox').fetchone()[0],'answerCallbackQuery')
+ def test_restart_preserves_pending_intent(self):
+  ingest(self.db,{'update_id':401,'message':{'chat':{'id':7},'text':'/start'}})
+  self.assertEqual(process_once(self.db,now=100,owner='first'),'completed')
+  self.db.close()
+  self.db=connect(self.path)
+  self.assertEqual(self.db.execute('SELECT state FROM telegram_outbox').fetchone()[0],'pending')
+  self.assertEqual(self.db.execute('SELECT status FROM telegram_updates').fetchone()[0],'completed')
+ def test_crash_after_claim_reclaim_without_duplicate_outbox(self):
+  ingest(self.db,{'update_id':402,'message':{'chat':{'id':7},'text':'/help'}})
+  first=claim(self.db,now=100,owner='crashed',lease_seconds=10)
+  self.assertIsNotNone(first)
+  self.db.close()
+  self.db=connect(self.path)
+  self.assertEqual(process_once(self.db,now=111,owner='replacement'),'completed')
+  self.assertEqual(self.db.execute('SELECT COUNT(*) FROM telegram_outbox').fetchone()[0],1)
+ def test_outbox_insert_is_idempotent(self):
+  ingest(self.db,{'update_id':403})
+  row=claim(self.db,now=100,owner='first')
+  message=('sendMessage',7,{'chat_id':7,'text':'test'})
+  complete_with_outbox(self.db,row,[message,message],now=100)
+  self.assertEqual(self.db.execute('SELECT COUNT(*) FROM telegram_outbox').fetchone()[0],2)
 if __name__=='__main__':
  unittest.main()
