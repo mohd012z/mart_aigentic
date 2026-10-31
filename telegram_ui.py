@@ -72,7 +72,7 @@ def commerce_page(page):
     if page == "guide":
         return "Select a platform, then Create draft. Send a product name in this private chat. Publishing is disabled."
     if page in PLATFORMS:
-        return f"📣 {page.replace('_', ' ').title()}\\nDraft assistant ready. Publishing unavailable."
+        return f"📣 {page.replace('_', ' ').title()}\nDraft assistant ready. Publishing unavailable."
     raise ValueError("Unknown commerce page")
 
 SHORTCUT_PLATFORMS = {
