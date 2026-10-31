@@ -11,7 +11,8 @@ export default {
   let update;try{const body=await request.text();if(bytes(body).length>65536)return json({error:"too_large"},413);update=JSON.parse(body)}catch{return json({error:"invalid_json"},400)}
   if(!Number.isSafeInteger(update?.update_id)||update.update_id<0)return json({error:"invalid_update_id"},400);
   try{
-   await env.MART_DB.prepare("INSERT INTO telegram_updates (update_id,payload,status,attempts,next_attempt_at) VALUES (?1,?2,'pending',0,0) ON CONFLICT(update_id) DO NOTHING").bind(update.update_id,JSON.stringify(update)).run();
+   const result=await env.MART_DB.prepare("INSERT INTO telegram_updates (update_id,payload,status,attempts,next_attempt_at) VALUES (?1,?2,'pending',0,0) ON CONFLICT(update_id) DO NOTHING").bind(update.update_id,JSON.stringify(update)).run();
+   if(!result || result.success!==true)throw new Error("D1 insert did not confirm success");
    return json({ok:true});
   }catch{return json({error:"storage_unavailable"},503)}
  }
