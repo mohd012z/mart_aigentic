@@ -28,7 +28,7 @@ async def transition(db,row,state,now=None,telegram_message_id=None,error=None):
     return await db.query("""
       UPDATE telegram_outbox SET state=?3,lease_until=NULL,worker_id=NULL,
         telegram_message_id=?4,last_error_code=?5,updated_at=?6
-      WHERE id=?1 AND worker_id=?2 AND state='sending'
+      WHERE id=?1 AND worker_id=?2 AND state='sending' AND lease_until>=?6
       RETURNING id
     """,(row['id'],row['worker_id'],state,telegram_message_id,error,now))
 
