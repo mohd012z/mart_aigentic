@@ -23,6 +23,9 @@ class OutboxTests(unittest.IsolatedAsyncioTestCase):
  async def test_claim_uses_lease_and_attempt_cap(self):
   db=FakeDB(row());await o.claim(db,now=100,owner='owner')
   self.assertEqual(db.calls[0][1],(190,'owner',100,5))
+ async def test_transition_rejects_expired_lease(self):
+  db=FakeDB(row());await o.transition(db,row(),'sent',now=100)
+  self.assertIn('lease_until>=?6',db.calls[-1][0])
  async def test_timeout_quarantined(self):
   db=FakeDB(row());client=FakeClient(error=httpx.ReadTimeout('timeout'))
   self.assertEqual(await o.deliver_once(db,'dummy',client),'uncertain')
