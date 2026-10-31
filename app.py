@@ -7,6 +7,7 @@ from telegram_ui import ACTIONS, keyboard, menu_text
 from observability import record, report
 import campaigns
 import time
+from social_agent import PLATFORMS, draft as social_draft
 
 app = FastAPI(title="MART Agentic Research")
 
@@ -49,7 +50,24 @@ async def telegram_webhook(request: Request, x_telegram_bot_api_secret_token: st
         return {"ok": True}
     cmd, _, arg = content.partition(" ")
     cmd = cmd.split("@", 1)[0].lower()
-    if cmd == "/campaign":
+    if cmd == "/commerce":
+        allowed = {v.strip() for v in os.getenv("MART_COMMERCE_ALLOWED_USER_IDS", "").split(",") if v.strip()}
+        user_id = str((message.get("from") or {}).get("id", ""))
+        private = (message.get("chat") or {}).get("type") == "private"
+        if os.getenv("MART_COMMERCE_ENABLED") != "1":
+            answer = "Commerce feature is disabled."
+        elif not private or not allowed or user_id not in allowed:
+            answer = "Commerce access denied. Use an authorized private chat."
+        elif not arg.strip():
+            answer = "Commerce draft: /commerce <platform> <product>\\nPlatforms: " + ", ".join(PLATFORMS)
+        else:
+            platform, separator, product = arg.strip().partition(" ")
+            try:
+                result = social_draft(platform, product) if separator else None
+                answer = ("DRAFT ONLY — NOT PUBLISHED\\n" + result["draft"] + "\\nReview required.") if result else "Usage: /commerce <platform> <product>"
+            except ValueError:
+                answer = "Invalid platform or product. Platforms: " + ", ".join(PLATFORMS)
+    elif cmd == "/campaign":
         if arg.strip():
             cid = campaigns.create(chat_id, arg.strip())
             answer = f"Campaign queued: {cid}. Use /campaignstatus {cid} to check. Publishing requires approval."
