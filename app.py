@@ -8,6 +8,7 @@ from observability import record, report
 import campaigns
 import time
 from social_agent import PLATFORMS, draft as social_draft
+from telegram_ui import commerce_keyboard, commerce_page
 
 app = FastAPI(title="MART Agentic Research")
 
@@ -17,13 +18,13 @@ HELP = ("MART Research Bot\n"
         "/status — service configuration status\n"
         "/help — commands")
 
-async def send_message(chat_id, message, menu=False):
+async def send_message(chat_id, message, menu=False, reply_markup=None):
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
     if not token:
         raise RuntimeError("TELEGRAM_BOT_TOKEN missing")
     async with httpx.AsyncClient(timeout=15) as client:
         response = await client.post(f"https://api.telegram.org/bot{token}/sendMessage",
-            json={"chat_id": chat_id, "text": message[:4096], "disable_web_page_preview": True, **({"reply_markup": keyboard()} if menu else {})})
+            json={"chat_id": chat_id, "text": message[:4096], "disable_web_page_preview": True, **({"reply_markup": reply_markup or keyboard()} if (menu or reply_markup) else {})})
         response.raise_for_status()
 
 @app.get("/health")
@@ -50,7 +51,9 @@ async def telegram_webhook(request: Request, x_telegram_bot_api_secret_token: st
         return {"ok": True}
     cmd, _, arg = content.partition(" ")
     cmd = cmd.split("@", 1)[0].lower()
-    if cmd == "/commerce":
+    if cmd in ("/commerce", "/commercemenu"):
+        if cmd == "/commercemenu":
+            arg = ""
         allowed = {v.strip() for v in os.getenv("MART_COMMERCE_ALLOWED_USER_IDS", "").split(",") if v.strip()}
         user_id = str((message.get("from") or {}).get("id", ""))
         private = (message.get("chat") or {}).get("type") == "private"
@@ -58,6 +61,9 @@ async def telegram_webhook(request: Request, x_telegram_bot_api_secret_token: st
             answer = "Commerce feature is disabled."
         elif not private or not allowed or user_id not in allowed:
             answer = "Commerce access denied. Use an authorized private chat."
+        elif not arg.strip():
+            await send_message(chat_id, commerce_page("home"), reply_markup=commerce_keyboard())
+            return {"ok": True}
         elif not arg.strip():
             answer = "Commerce draft: /commerce <platform> <product>\\nPlatforms: " + ", ".join(PLATFORMS)
         else:
@@ -112,6 +118,9 @@ async def answer_callback(callback):
     if not token:
         raise RuntimeError("TELEGRAM_BOT_TOKEN missing")
     data = callback.get("data", "")
+    if data.startswith("commerce:"):
+        await commerce_callback(callback)
+        return
     kind = data.removeprefix("action:")
     chat_id = (callback.get("message") or {}).get("chat", {}).get("id")
     async with httpx.AsyncClient(timeout=10) as client:
@@ -137,3 +146,33 @@ def create_draft(kind, topic):
     }
     template = templates.get(kind, "Research affiliate products, disclose partnerships, and verify product claims.")
     return f"{kind.upper()} — {topic}\n\n" + template.replace("{topic}", topic)
+
+async def commerce_callback(callback):
+    """Authorize callback sender; never trust button origin as proof of identity."""
+    chat = (callback.get("message") or {}).get("chat") or {}
+    chat_id = chat.get("id")
+    user_id = str((callback.get("from") or {}).get("id", ""))
+    allowed = {v.strip() for v in os.getenv("MART_COMMERCE_ALLOWED_USER_IDS", "").split(",") if v.strip()}
+    enabled = os.getenv("MART_COMMERCE_ENABLED") == "1"
+    permitted = enabled and chat.get("type") == "private" and user_id in allowed
+    token = os.getenv("TELEGRAM_BOT_TOKEN")
+    if not token:
+        raise RuntimeError("TELEGRAM_BOT_TOKEN missing")
+    async with httpx.AsyncClient(timeout=10) as client:
+        response = await client.post(f"https://api.telegram.org/bot{token}/answerCallbackQuery",
+            json={"callback_query_id": callback["id"],
+                  **({"text": "Access denied", "show_alert": True} if not permitted else {})})
+        response.raise_for_status()
+    if not permitted or not chat_id:
+        return
+    data = callback["data"].split(":")
+    page = data[1] if len(data) > 1 else "home"
+    if page == "draft" and len(data) == 3 and data[2] in PLATFORMS:
+        await send_message(chat_id, f"Send /commerce {data[2]} <product name> to generate a draft.",
+                           reply_markup=commerce_keyboard(data[2]))
+    else:
+        try:
+            text = commerce_page(page)
+        except ValueError:
+            text, page = commerce_page("home"), "home"
+        await send_message(chat_id, text, reply_markup=commerce_keyboard(page if page in PLATFORMS else "home"))
