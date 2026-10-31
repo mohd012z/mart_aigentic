@@ -72,7 +72,7 @@ class RecoveryTests(unittest.TestCase):
   self.db=connect(self.path)
   self.assertEqual(process_once(self.db,now=111,owner='replacement'),'completed')
   self.assertEqual(self.db.execute('SELECT COUNT(*) FROM telegram_outbox').fetchone()[0],1)
- def test_outbox_insert_is_idempotent(self):
+ def test_multiple_outbox_intents_are_deterministic(self):
   ingest(self.db,{'update_id':403})
   row=claim(self.db,now=100,owner='first')
   message=('sendMessage',7,{'chat_id':7,'text':'test'})
