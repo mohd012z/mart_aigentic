@@ -26,6 +26,8 @@ async def send_message(chat_id, message, menu=False, reply_markup=None):
         response = await client.post(f"https://api.telegram.org/bot{token}/sendMessage",
             json={"chat_id": chat_id, "text": message[:4096], "disable_web_page_preview": True, **({"reply_markup": reply_markup or keyboard()} if (menu or reply_markup) else {})})
         response.raise_for_status()
+        if not response.json().get("ok"):
+            raise RuntimeError("Telegram sendMessage returned unsuccessful result")
 
 @app.get("/health")
 async def health():
