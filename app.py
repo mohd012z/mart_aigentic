@@ -64,8 +64,6 @@ async def telegram_webhook(request: Request, x_telegram_bot_api_secret_token: st
         elif not arg.strip():
             await send_message(chat_id, commerce_page("home"), reply_markup=commerce_keyboard())
             return {"ok": True}
-        elif not arg.strip():
-            answer = "Commerce draft: /commerce <platform> <product>\\nPlatforms: " + ", ".join(PLATFORMS)
         else:
             platform, separator, product = arg.strip().partition(" ")
             try:
