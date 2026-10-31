@@ -1,7 +1,7 @@
 name: MART recovery isolated CI
 on:
   push:
-    branches: [feature/mart-workers-durable-recovery]
+    branches: [feature/mart-recovery-clean-review]
   workflow_dispatch:
 jobs:
   python:
