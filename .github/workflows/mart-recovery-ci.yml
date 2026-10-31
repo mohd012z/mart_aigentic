@@ -1,0 +1,36 @@
+name: MART recovery isolated CI
+on:
+  push:
+    branches: [feature/mart-recovery-clean-review]
+  pull_request:
+    paths:
+      - 'workers/**'
+      - 'scripts/mart_migration_manifest.py'
+      - 'scripts/export_mart_sqlite_dry_run.py'
+      - 'tests/test_mart_sqlite_dry_run.py'
+      - '.github/workflows/mart-recovery-ci.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install -r requirements.txt
+      - run: python -m unittest discover -s tests -v
+      - run: python -m unittest discover -s workers/tests -p 'test_*.py' -t . -v
+  worker:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: workers
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm test
