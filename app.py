@@ -71,7 +71,7 @@ async def telegram_webhook(request: Request, x_telegram_bot_api_secret_token: st
             platform, separator, product = arg.strip().partition(" ")
             try:
                 result = social_draft(platform, product) if separator else None
-                answer = ("DRAFT ONLY — NOT PUBLISHED\\n" + result["draft"] + "\\nReview required.") if result else "Usage: /commerce <platform> <product>"
+                answer = ("DRAFT ONLY — NOT PUBLISHED\n" + result["draft"] + "\nReview required.") if result else "Usage: /commerce <platform> <product>"
             except ValueError:
                 answer = "Invalid platform or product. Platforms: " + ", ".join(PLATFORMS)
     elif cmd == "/campaign":
@@ -88,7 +88,7 @@ async def telegram_webhook(request: Request, x_telegram_bot_api_secret_token: st
         cid = campaigns.create(chat_id, content)
         answer = f"Campaign queued: {cid}. Use /campaignstatus {cid} to check."
     elif cmd in ("/start", "/help", "/menu"):
-        answer = HELP
+        answer = menu_text() + "\n\n" + HELP
     elif cmd in ("/usage", "/quality", "/agentstatus", "/report"):
         answer = report()
     elif cmd == "/status":
@@ -128,7 +128,9 @@ async def answer_callback(callback):
         r = await client.post(f"https://api.telegram.org/bot{token}/answerCallbackQuery", json={"callback_query_id": callback["id"]})
         r.raise_for_status()
     if chat_id:
-        if kind == "campaign":
+        if kind == "commerce":
+            await commerce_callback({**callback, "data": "commerce:home"})
+        elif kind == "campaign":
             user_id = (callback.get("from") or {}).get("id")
             campaigns.select(chat_id, user_id, "campaign")
             await send_message(chat_id, "Send a product or business topic to create a campaign.", menu=True)
