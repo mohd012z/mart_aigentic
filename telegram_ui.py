@@ -23,6 +23,7 @@ COMMANDS = [
     {"command":"help","description":"Show instructions"},
 ]
 ACTIONS = {
+    "commerce": ("🛍 Commerce Studio", "Commerce menu"),
     "campaign": ("🚀 Run Campaign", "Marketing campaign"),
     "research": ("🔎 Research", "Research"),
     "recommend": ("📈 Recommendations", "Recommendations"),
@@ -56,6 +57,8 @@ def commerce_keyboard(page="home"):
         items = COMMERCE_PAGES["home"]
         rows = [[{"text": title, "callback_data": "commerce:" + code}
                  for title, code in items[i:i+2]] for i in range(0, len(items), 2)]
+    elif page in ("connections", "guide"):
+        rows = []
     else:
         rows = [[{"text": "✍️ Create draft", "callback_data": "commerce:draft:" + page}]]
     rows.append([{"text": "🏠 Commerce home", "callback_data": "commerce:home"}])
@@ -63,7 +66,7 @@ def commerce_keyboard(page="home"):
 def commerce_page(page):
     from social_agent import PLATFORMS
     if page == "home":
-        return "🧠 MART AI Commerce Studio\\nSelect a platform below. Drafts only; no publishing."
+        return "🧠 MART AI Commerce Studio\nSelect a platform below. Drafts only; no publishing."
     if page == "connections":
         return "🔒 Connections: no social or seller API accounts connected. Official OAuth is required."
     if page == "guide":
