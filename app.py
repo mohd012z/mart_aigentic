@@ -8,7 +8,7 @@ from observability import record, report
 import campaigns
 import time
 from social_agent import PLATFORMS, draft as social_draft
-from telegram_ui import commerce_keyboard, commerce_page
+from telegram_ui import commerce_keyboard, commerce_page, SHORTCUT_PLATFORMS
 
 app = FastAPI(title="MART Agentic Research")
 
@@ -51,9 +51,11 @@ async def telegram_webhook(request: Request, x_telegram_bot_api_secret_token: st
         return {"ok": True}
     cmd, _, arg = content.partition(" ")
     cmd = cmd.split("@", 1)[0].lower()
-    if cmd in ("/commerce", "/commercemenu"):
-        if cmd == "/commercemenu":
+    if cmd in ("/commerce", "/commercemenu", "/connections") or cmd.lstrip("/") in SHORTCUT_PLATFORMS:
+        if cmd in ("/commercemenu", "/connections"):
             arg = ""
+        elif cmd.lstrip("/") in SHORTCUT_PLATFORMS:
+            arg = SHORTCUT_PLATFORMS[cmd.lstrip("/")] + (" " + arg if arg.strip() else "")
         allowed = {v.strip() for v in os.getenv("MART_COMMERCE_ALLOWED_USER_IDS", "").split(",") if v.strip()}
         user_id = str((message.get("from") or {}).get("id", ""))
         private = (message.get("chat") or {}).get("type") == "private"
@@ -61,8 +63,9 @@ async def telegram_webhook(request: Request, x_telegram_bot_api_secret_token: st
             answer = "Commerce feature is disabled."
         elif not private or not allowed or user_id not in allowed:
             answer = "Commerce access denied. Use an authorized private chat."
-        elif not arg.strip():
-            await send_message(chat_id, commerce_page("home"), reply_markup=commerce_keyboard())
+        elif not arg.strip() or cmd == "/connections" or (cmd.lstrip("/") in SHORTCUT_PLATFORMS and arg.strip() in PLATFORMS):
+            page = "connections" if cmd == "/connections" else SHORTCUT_PLATFORMS.get(cmd.lstrip("/"), "home")
+            await send_message(chat_id, commerce_page(page), reply_markup=commerce_keyboard(page if page in PLATFORMS else "home"))
             return {"ok": True}
         else:
             platform, separator, product = arg.strip().partition(" ")
