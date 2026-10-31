@@ -15,3 +15,14 @@ test('unauthorized concurrent requests cannot insert',async()=>{
  const responses=await Promise.all(requests);
  assert.ok(responses.every(r=>r.status===403));assert.equal(rows.size,0);
 });
+
+test('D1 unsuccessful result must return retryable 503',async()=>{
+ const env={TELEGRAM_WEBHOOK_SECRET:'secret',MART_DB:{prepare(){return{bind(){return{async run(){return{success:false}}}}}}}};
+ const response=await worker.fetch(new Request('https://example.test/telegram/webhook',{method:'POST',headers:{'X-Telegram-Bot-Api-Secret-Token':'secret'},body:JSON.stringify({update_id:904})}),env);
+ assert.equal(response.status,503);
+});
+test('oversized body rejected without D1 access',async()=>{
+ const env={TELEGRAM_WEBHOOK_SECRET:'secret',MART_DB:{prepare(){throw Error('D1 accessed')}}};
+ const response=await worker.fetch(new Request('https://example.test/telegram/webhook',{method:'POST',headers:{'X-Telegram-Bot-Api-Secret-Token':'secret'},body:'x'.repeat(65537)}),env);
+ assert.equal(response.status,413);
+});
