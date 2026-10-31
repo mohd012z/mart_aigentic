@@ -1,6 +1,11 @@
 name: Diagnose MART Telegram (read only)
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/diagnose-telegram.yml'
+      - 'scripts/diagnose_telegram.py'
 permissions:
   contents: read
 jobs:
