@@ -1,5 +1,14 @@
 """Telegram keyboard and command registry."""
 COMMANDS = [
+    {"command":"commerce","description":"AI commerce menu and drafts"},
+    {"command":"commercemenu","description":"Open commerce platform buttons"},
+    {"command":"shopee","description":"Shopee seller draft shortcut"},
+    {"command":"facebook","description":"Facebook content draft shortcut"},
+    {"command":"instagram","description":"Instagram content draft shortcut"},
+    {"command":"threads","description":"Threads content draft shortcut"},
+    {"command":"tiktok","description":"TikTok content draft shortcut"},
+    {"command":"tiktokshop","description":"TikTok Shop draft shortcut"},
+    {"command":"connections","description":"View account connection status"},
     {"command":"campaign","description":"One-click marketing campaign"},
     {"command":"campaignstatus","description":"Check campaign progress"},
     {"command":"start","description":"Open MART dashboard"},
@@ -62,3 +71,11 @@ def commerce_page(page):
     if page in PLATFORMS:
         return f"📣 {page.replace('_', ' ').title()}\\nDraft assistant ready. Publishing unavailable."
     raise ValueError("Unknown commerce page")
+
+SHORTCUT_PLATFORMS = {
+    "shopee": "shopee", "facebook": "facebook", "instagram": "instagram",
+    "threads": "threads", "tiktok": "tiktok", "tiktokshop": "tiktok_shop",
+}
+def bot_commands():
+    """Telegram setMyCommands payload; registering it requires a separate authorized API call."""
+    return list(COMMANDS)
