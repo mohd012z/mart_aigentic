@@ -3,7 +3,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
-from workers.sqlite_recovery import connect, ingest, claim, complete_with_outbox, process_once
+from workers.sqlite_recovery import connect, ingest, claim, complete_with_outbox, process_once, render
 
 class RecoveryTests(unittest.TestCase):
  def setUp(self):
@@ -78,5 +78,35 @@ class RecoveryTests(unittest.TestCase):
   message=('sendMessage',7,{'chat_id':7,'text':'test'})
   complete_with_outbox(self.db,row,[message,message],now=100)
   self.assertEqual(self.db.execute('SELECT COUNT(*) FROM telegram_outbox').fetchone()[0],2)
+ def test_malformed_render_payloads_fail_closed(self):
+  from workers.sqlite_recovery import render
+  for update in (None, [], {'callback_query': True},
+                 {'message': 'not-an-object'},
+                 {'message': {'chat': 'not-an-object', 'text': '/help'}},
+                 {'message': {'chat': {'id': 42}, 'text': None}},
+                 {'message': {'chat': {'id': True}, 'text': '/help'}}):
+   with self.subTest(update=update):
+    self.assertEqual(render(update), [])
+
+ def test_invalid_updates_do_not_poison_queue(self):
+  malformed=(
+   {'message': {'chat': {'id': 42}, 'text': None}},
+   {'callback_query': True},
+   {'message': {'chat': 'invalid', 'text': '/help'}},
+  )
+  for uid, fields in enumerate(malformed, 600):
+   self.assertTrue(ingest(self.db, {'update_id': uid, **fields}))
+  self.assertTrue(ingest(self.db, {'update_id': 603, 'message': {'chat': {'id': 42}, 'text': '/status'}}))
+  for _ in range(4):
+   self.assertEqual(process_once(self.db, now=100, owner='safe'), 'completed')
+  self.assertEqual(self.db.execute('SELECT COUNT(*) FROM telegram_outbox').fetchone()[0], 1)
+  self.assertEqual(self.db.execute("SELECT COUNT(*) FROM telegram_updates WHERE status='completed'").fetchone()[0], 4)
+
+ def test_help_menu_uses_actual_newlines(self):
+  from workers.sqlite_recovery import render
+  message=render({'message': {'chat': {'id': 42}, 'text': '/help'}})[0][2]['text']
+  self.assertIn('\n/research <topic>', message)
+  self.assertNotIn('\\n', message)
+
 if __name__=='__main__':
  unittest.main()

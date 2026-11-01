@@ -60,21 +60,30 @@ def claim(db, now=None, owner=None, max_attempts=5, lease_seconds=120):
         raise
 
 def render(update):
-    """Side-effect-free commands. Unsupported commands fail closed."""
+    """Side-effect-free commands. Unsupported or malformed updates fail closed."""
+    if not isinstance(update, dict):
+        return []
     callback = update.get("callback_query")
-    if callback:
+    if callback is not None:
+        if not isinstance(callback, dict):
+            return []
         callback_id = callback.get("id")
         if not isinstance(callback_id, str) or not callback_id:
             return []
         return [("answerCallbackQuery", 0, {"callback_query_id": callback_id})]
-    message = update.get("message") or {}
-    chat_id = (message.get("chat") or {}).get("id")
-    text = message.get("text", "").strip()
-    if type(chat_id) is not int or not text:
+    message = update.get("message")
+    if not isinstance(message, dict):
+        return []
+    chat = message.get("chat")
+    if not isinstance(chat, dict):
+        return []
+    chat_id = chat.get("id")
+    text = message.get("text")
+    if type(chat_id) is not int or not isinstance(text, str) or not text.strip():
         return []
     command = text.split(None, 1)[0].split("@", 1)[0].lower()
     if command in ("/start", "/help", "/menu"):
-        response = "MART Research Bot\\n/research <topic>\\n/recommend <topic>\\n/status\\n/help"
+        response = "MART Research Bot\n/research <topic>\n/recommend <topic>\n/status\n/help"
     elif command == "/status":
         response = "Recovery service online. Research commands are not enabled in this offline adapter."
     else:
