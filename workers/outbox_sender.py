@@ -61,10 +61,18 @@ async def deliver_once(db,token,client=None):
         if not isinstance(body,dict):
             return await finish('uncertain',error='invalid_response')
         if response.status_code==200 and body.get('ok') is True:
-            msg=body.get('result') or {}
-            if not isinstance(msg,dict):
+            result=body.get('result')
+            if row['method']=='answerCallbackQuery':
+                # Telegram returns a Boolean for this method, not a Message.
+                if result is not True:
+                    return await finish('uncertain',error='invalid_response')
+                return await finish('sent')
+            if not isinstance(result,dict):
                 return await finish('uncertain',error='invalid_response')
-            return await finish('sent',telegram_message_id=msg.get('message_id'))
+            message_id=result.get('message_id')
+            if type(message_id) is not int or message_id<=0:
+                return await finish('uncertain',error='invalid_response')
+            return await finish('sent',telegram_message_id=message_id)
         # 429 and 5xx may have ambiguous server-side effects; require reconciliation.
         if response.status_code==429 or response.status_code>=500:
             return await finish('uncertain',error='server_or_rate_limit')
