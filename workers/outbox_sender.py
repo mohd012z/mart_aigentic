@@ -37,31 +37,38 @@ async def deliver_once(db,token,client=None):
     if row is None:return 'idle'
     own=client is None
     if own:client=httpx.AsyncClient(timeout=15)
+    async def finish(state,**kwargs):
+        # A lost lease must never be reported as a persisted delivery result.
+        changed=await transition(db,row,state,**kwargs)
+        return state if changed else 'uncertain'
     try:
-        payload=json.loads(row['payload'])
+        try:
+            payload=json.loads(row['payload'])
+        except (ValueError,TypeError):
+            return await finish('dead',error='invalid_payload')
+        if not isinstance(payload,dict):
+            return await finish('dead',error='invalid_payload')
         if row['method'] not in ('sendMessage','answerCallbackQuery'):
-            await transition(db,row,'dead',error='unsupported_method')
-            return 'dead'
+            return await finish('dead',error='unsupported_method')
         try:
             response=await client.post(
                 f"https://api.telegram.org/bot{token}/{row['method']}",json=payload)
         except (httpx.TimeoutException,httpx.TransportError):
-            await transition(db,row,'uncertain',error='transport_ambiguous')
-            return 'uncertain'
+            return await finish('uncertain',error='transport_ambiguous')
         try:body=response.json()
         except ValueError:
-            await transition(db,row,'uncertain',error='invalid_response')
-            return 'uncertain'
+            return await finish('uncertain',error='invalid_response')
+        if not isinstance(body,dict):
+            return await finish('uncertain',error='invalid_response')
         if response.status_code==200 and body.get('ok') is True:
             msg=body.get('result') or {}
-            await transition(db,row,'sent',telegram_message_id=msg.get('message_id'))
-            return 'sent'
+            if not isinstance(msg,dict):
+                return await finish('uncertain',error='invalid_response')
+            return await finish('sent',telegram_message_id=msg.get('message_id'))
         # 429 and 5xx may have ambiguous server-side effects; require reconciliation.
         if response.status_code==429 or response.status_code>=500:
-            await transition(db,row,'uncertain',error='server_or_rate_limit')
-            return 'uncertain'
-        await transition(db,row,'dead',error='telegram_rejected')
-        return 'dead'
+            return await finish('uncertain',error='server_or_rate_limit')
+        return await finish('dead',error='telegram_rejected')
     finally:
         if own:await client.aclose()
 
