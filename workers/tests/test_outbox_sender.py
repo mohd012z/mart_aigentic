@@ -34,7 +34,7 @@ class OutboxTests(unittest.IsolatedAsyncioTestCase):
   self.assertIn('worker_id=?2',db.calls[-1][0])
   self.assertEqual(db.calls[-1][1][2],'uncertain')
  async def test_success_marked_sent(self):
-  db=FakeDB(row());response=httpx.Response(200,json={'ok':True,'result':{'message_id':77}})
+  db=FakeDB(row());response=httpx.Response(200,json={'ok':True,'result':{'message_id':77,'chat':{'id':1}}})
   self.assertEqual(await o.deliver_once(db,'dummy',FakeClient(response)),'sent')
   self.assertEqual(db.calls[-1][1][3],77)
  async def test_rate_limit_quarantined(self):
@@ -47,7 +47,7 @@ class OutboxTests(unittest.IsolatedAsyncioTestCase):
   with self.assertRaises(ValueError):await o.reconcile(FakeDB(),'id','pending')
  async def test_lost_lease_after_telegram_success_not_reported_sent(self):
   db=FakeDB(row(),transition_accepted=False)
-  response=httpx.Response(200,json={'ok':True,'result':{'message_id':77}})
+  response=httpx.Response(200,json={'ok':True,'result':{'message_id':77,'chat':{'id':1}}})
   self.assertEqual(await o.deliver_once(db,'dummy',FakeClient(response)),'uncertain')
  async def test_malformed_json_payload_quarantined_without_network_send(self):
   bad=row();bad['payload']='{'
@@ -77,4 +77,24 @@ class OutboxTests(unittest.IsolatedAsyncioTestCase):
   callback=row();callback['method']='answerCallbackQuery';callback['payload']='{"callback_query_id":"q1"}'
   response=httpx.Response(200,json={'ok':True,'result':True})
   self.assertEqual(await o.deliver_once(FakeDB(callback,transition_accepted=False),'dummy',FakeClient(response)),'uncertain')
+ async def test_payload_destination_mismatch_is_dead_without_send(self):
+  wrong=row();wrong['payload']='{"chat_id":2,"text":"hi"}'
+  client=FakeClient()
+  db=FakeDB(wrong)
+  self.assertEqual(await o.deliver_once(db,'dummy',client),'dead')
+  self.assertEqual(client.calls,0)
+  self.assertEqual(db.calls[-1][1][4],'destination_mismatch')
+ async def test_missing_receipt_destination_is_uncertain(self):
+  response=httpx.Response(200,json={'ok':True,'result':{'message_id':77}})
+  db=FakeDB(row())
+  self.assertEqual(await o.deliver_once(db,'dummy',FakeClient(response)),'uncertain')
+  self.assertEqual(db.calls[-1][1][4],'destination_unverified')
+ async def test_wrong_receipt_destination_is_uncertain(self):
+  response=httpx.Response(200,json={'ok':True,'result':{'message_id':77,'chat':{'id':2}}})
+  db=FakeDB(row())
+  self.assertEqual(await o.deliver_once(db,'dummy',FakeClient(response)),'uncertain')
+  self.assertEqual(db.calls[-1][1][4],'destination_unverified')
+ async def test_boolean_receipt_destination_is_uncertain(self):
+  response=httpx.Response(200,json={'ok':True,'result':{'message_id':77,'chat':{'id':True}}})
+  self.assertEqual(await o.deliver_once(FakeDB(row()),'dummy',FakeClient(response)),'uncertain')
 if __name__=='__main__':unittest.main()
