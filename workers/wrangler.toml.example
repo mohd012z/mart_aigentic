@@ -1,0 +1,9 @@
+name = "mart-telegram-ingress-dev"
+main = "mart-webhook.js"
+compatibility_date = "2026-10-01"
+# Do not deploy until approval. Bind a dedicated development D1 database.
+# [[d1_databases]]
+# binding = "MART_DB"
+# database_name = "mart-telegram-dev"
+# database_id = "REPLACE_WITH_DEV_DATABASE_ID"
+# Configure TELEGRAM_WEBHOOK_SECRET as a Worker secret; never put it here.
