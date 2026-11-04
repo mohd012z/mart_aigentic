@@ -131,7 +131,14 @@ async def telegram_webhook(request: Request, x_telegram_bot_api_secret_token: st
         answer = await research(arg.strip()) if arg.strip() else "Usage: " + cmd + " <topic>"
     else:
         answer = HELP
-    await send_message(chat_id, answer, menu=True)
+    if isinstance(answer, str) and len(answer) > 3900:
+        remaining = answer
+        while remaining:
+            chunk = remaining[:3900]
+            remaining = remaining[3900:]
+            await send_message(chat_id, chunk, menu=not remaining)
+    else:
+        await send_message(chat_id, answer, menu=True)
     return {"ok": True}
 
 async def answer_callback(callback):
