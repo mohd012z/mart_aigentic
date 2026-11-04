@@ -54,7 +54,7 @@ async def telegram_webhook(request: Request, x_telegram_bot_api_secret_token: st
         if arg.strip():
             try:
                 draft_id, variants = affiliate_copy.generate(chat_id, arg.strip())
-                answer = f"Affiliate draft #{draft_id} saved.\\n\\n" + "\\n\\n".join(variants)
+                answer = f"Affiliate draft #{draft_id} saved.\n\n" + "\n\n".join(variants)
             except ValueError as exc:
                 answer = str(exc)
         else:
@@ -96,7 +96,7 @@ async def telegram_webhook(request: Request, x_telegram_bot_api_secret_token: st
         elif pending == "affiliate_product":
             try:
                 draft_id, variants = affiliate_copy.generate(chat_id, content)
-                answer = f"Affiliate draft #{draft_id} saved.\\n\\n" + "\\n\\n".join(variants)
+                answer = f"Affiliate draft #{draft_id} saved.\n\n" + "\n\n".join(variants)
             except ValueError as exc:
                 answer = str(exc)
         elif pending == "affiliate_prompt":
