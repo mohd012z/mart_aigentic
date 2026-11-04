@@ -86,7 +86,7 @@ def generate(chat, raw):
     for index, (en, ms) in enumerate(ANGLES, 1):
         angle = ms if language == "ms" else en
         prefix = "Sudut promosi" if language == "ms" else "Promotional angle"
-        variants.append(f"{index}. {prefix}: {angle}\\n{product}\\n{check}\\n{disclosure}")
+        variants.append(f"{index}. {prefix}: {angle}\n{product}\n{check}\n{disclosure}")
     with connect() as db:
         cursor = db.execute("INSERT INTO affiliate_drafts(chat,product,language,variants) VALUES (?,?,?,?)",
                             (chat, product, language, json.dumps(variants, ensure_ascii=False)))
@@ -98,7 +98,7 @@ def history(chat):
     with connect() as db:
         rows = db.execute("SELECT id,product,language FROM affiliate_drafts WHERE chat=? ORDER BY id DESC LIMIT 5",
                           (chat,)).fetchall()
-    return "\\n".join(f"#{i} [{lang}] {p[:80]}" for i,p,lang in rows) or "No affiliate drafts saved."
+    return "\n".join(f"#{i} [{lang}] {p[:80]}" for i,p,lang in rows) or "No affiliate drafts saved."
 
 
 def draft(chat, draft_id):
