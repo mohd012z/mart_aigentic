@@ -6,6 +6,7 @@ from mart_engine import research
 from telegram_ui import ACTIONS, keyboard, menu_text
 from observability import record, report
 import campaigns
+import affiliate_copy
 import time
 
 app = FastAPI(title="MART Agentic Research")
@@ -49,7 +50,35 @@ async def telegram_webhook(request: Request, x_telegram_bot_api_secret_token: st
         return {"ok": True}
     cmd, _, arg = content.partition(" ")
     cmd = cmd.split("@", 1)[0].lower()
-    if cmd == "/campaign":
+    if cmd == "/affiliatecopy":
+        if arg.strip():
+            try:
+                draft_id, variants = affiliate_copy.generate(chat_id, arg.strip())
+                answer = f"Affiliate draft #{draft_id} saved.\\n\\n" + "\\n\\n".join(variants)
+            except ValueError as exc:
+                answer = str(exc)
+        else:
+            campaigns.select(chat_id, message.get("from", {}).get("id"), "affiliate_product")
+            answer = "Send a product description or supported HTTPS Shopee/Lazada URL."
+    elif cmd == "/affiliatelang":
+        if arg.strip().lower() in ("ms", "en"):
+            affiliate_copy.set_language(chat_id, arg.strip().lower())
+            answer = "Affiliate language updated."
+        else:
+            answer = "Usage: /affiliatelang ms or /affiliatelang en"
+    elif cmd == "/affiliateprompt":
+        if arg.strip():
+            try:
+                affiliate_copy.set_guidance(chat_id, arg.strip())
+                answer = "Editorial guidance saved. This template generator does not run an AI model."
+            except ValueError as exc:
+                answer = str(exc)
+        else:
+            campaigns.select(chat_id, message.get("from", {}).get("id"), "affiliate_prompt")
+            answer = "Send editorial guidance (1–800 characters)."
+    elif cmd == "/affiliatedrafts":
+        answer = affiliate_copy.history(chat_id)
+    elif cmd == "/campaign":
         if arg.strip():
             cid = campaigns.create(chat_id, arg.strip())
             answer = f"Campaign queued: {cid}. Use /campaignstatus {cid} to check. Publishing requires approval."
@@ -59,9 +88,25 @@ async def telegram_webhook(request: Request, x_telegram_bot_api_secret_token: st
     elif cmd == "/campaignstatus":
         row = campaigns.get(arg.strip(), chat_id)
         answer = f"Campaign {arg.strip()}: {row[0]}\\n{row[1][:3200]}" if row else "Campaign not found."
-    elif not content.startswith("/") and campaigns.consume(chat_id, message.get("from", {}).get("id")) == "campaign":
-        cid = campaigns.create(chat_id, content)
-        answer = f"Campaign queued: {cid}. Use /campaignstatus {cid} to check."
+    elif not content.startswith("/"):
+        pending = campaigns.consume(chat_id, message.get("from", {}).get("id"))
+        if pending == "campaign":
+            cid = campaigns.create(chat_id, content)
+            answer = f"Campaign queued: {cid}. Use /campaignstatus {cid} to check."
+        elif pending == "affiliate_product":
+            try:
+                draft_id, variants = affiliate_copy.generate(chat_id, content)
+                answer = f"Affiliate draft #{draft_id} saved.\\n\\n" + "\\n\\n".join(variants)
+            except ValueError as exc:
+                answer = str(exc)
+        elif pending == "affiliate_prompt":
+            try:
+                affiliate_copy.set_guidance(chat_id, content)
+                answer = "Editorial guidance saved. Templates do not run an AI model."
+            except ValueError as exc:
+                answer = str(exc)
+        else:
+            answer = HELP
     elif cmd in ("/start", "/help", "/menu"):
         answer = HELP
     elif cmd in ("/usage", "/quality", "/agentstatus", "/report"):
@@ -104,6 +149,9 @@ async def answer_callback(callback):
             user_id = (callback.get("from") or {}).get("id")
             campaigns.select(chat_id, user_id, "campaign")
             await send_message(chat_id, "Send a product or business topic to create a campaign.", menu=True)
+        elif kind == "affiliatecopy":
+            campaigns.select(chat_id, (callback.get("from") or {}).get("id"), "affiliate_product")
+            await send_message(chat_id, "Send product details or a supported HTTPS product URL.", menu=True)
         elif kind in ACTIONS:
             await send_message(chat_id, f"Selected: {ACTIONS[kind][0]}\nEnter /{kind} followed by your topic.", menu=True)
         else:
