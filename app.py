@@ -7,6 +7,7 @@ from telegram_ui import ACTIONS, keyboard, menu_text
 from observability import record, report
 import campaigns
 import affiliate_copy
+import cloudflare_research
 import time
 
 app = FastAPI(title="MART Agentic Research")
@@ -113,6 +114,12 @@ async def telegram_webhook(request: Request, x_telegram_bot_api_secret_token: st
         answer = report()
     elif cmd == "/status":
         answer = "Service online. Research provider: " + ("configured" if os.getenv("BRAVE_SEARCH_API_KEY") else "missing")
+    elif cmd in ("/research", "/recommend", "/affiliate") and arg.strip() and cloudflare_research.configuration():
+        try:
+            job = await cloudflare_research.enqueue(update.get("update_id"), chat_id, arg.strip(), cmd)
+            answer = "Research queued with Cloudflare. Results will be sent to this chat after processing. Job: " + job[:12]
+        except (httpx.HTTPError, ValueError, RuntimeError) as exc:
+            answer = "Cloudflare research queue unavailable (" + type(exc).__name__ + "). Please retry later."
     elif cmd.lstrip("/") in ACTIONS:
         kind = cmd.lstrip("/")
         if not arg.strip():
