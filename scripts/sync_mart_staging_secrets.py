@@ -79,6 +79,34 @@ def main():
             print(f"FAILED: staging secret {name}; network or invalid JSON response")
             return 1
         print(f"PASS: staging secret {name} synchronized")
+    # Read back metadata, not values. Fail the job if either secret is missing.
+    verify_request = urllib.request.Request(
+        ENDPOINT,
+        headers={"Authorization": "Bearer " + cloudflare},
+        method="GET",
+    )
+    try:
+        with urllib.request.urlopen(verify_request, timeout=20) as response:
+            payload = json.load(response)
+        if payload.get("success") is not True:
+            print("FAILED: Cloudflare secret metadata verification was rejected")
+            return 1
+        names = {
+            item.get("name")
+            for item in payload.get("result", [])
+            if isinstance(item, dict)
+        }
+        required = {"TELEGRAM_BOT_TOKEN", "TELEGRAM_WEBHOOK_SECRET"}
+        if not required.issubset(names):
+            print("FAILED: required staging secret names absent after upload")
+            return 1
+    except urllib.error.HTTPError as error:
+        print(f"FAILED: secret metadata verification HTTP {error.code}")
+        return 1
+    except (urllib.error.URLError, TimeoutError, ValueError, TypeError):
+        print("FAILED: secret metadata verification unavailable")
+        return 1
+    print("PASS: both staging secret names verified through Cloudflare API")
     print("PASS: staging-only secret sync; no Telegram messages or webhook registration")
     return 0
 
