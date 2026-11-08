@@ -1,0 +1,42 @@
+name: Register MART Telegram Commands (manual only)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: mart-telegram-command-registration
+  cancel-in-progress: false
+jobs:
+  register-menu:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout research branch
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Enforce authorized research branch
+        env:
+          CURRENT_REF: ${{ github.ref }}
+        run: |
+          if [ "$CURRENT_REF" != "refs/heads/research/telegram-menu-repair-20261108" ]; then
+            echo "Ref rejected: research branch required."
+            exit 1
+          fi
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install HTTP client
+        run: python -m pip install 'httpx>=0.27,<1'
+      - name: Validate script syntax and command registry
+        run: python -m py_compile scripts/register_and_verify_telegram_menu.py telegram_ui.py
+      - name: Register and verify exactly 13 commands
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        run: |
+          if [ -z "$TELEGRAM_BOT_TOKEN" ]; then
+            echo "Missing TELEGRAM_BOT_TOKEN secret; registration not attempted."
+            exit 1
+          fi
+          echo "::add-mask::$TELEGRAM_BOT_TOKEN"
+          python -m scripts.register_and_verify_telegram_menu
