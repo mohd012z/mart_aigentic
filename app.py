@@ -62,7 +62,9 @@ async def telegram_webhook(request: Request, x_telegram_bot_api_secret_token: st
     elif not content.startswith("/") and campaigns.consume(chat_id, message.get("from", {}).get("id")) == "campaign":
         cid = campaigns.create(chat_id, content)
         answer = f"Campaign queued: {cid}. Use /campaignstatus {cid} to check."
-    elif cmd in ("/start", "/help", "/menu"):
+    elif cmd in ("/start", "/menu"):
+        answer = menu_text()
+    elif cmd == "/help":
         answer = HELP
     elif cmd in ("/usage", "/quality", "/agentstatus", "/report"):
         answer = report()
@@ -106,6 +108,10 @@ async def answer_callback(callback):
             await send_message(chat_id, "Send a product or business topic to create a campaign.", menu=True)
         elif kind in ACTIONS:
             await send_message(chat_id, f"Selected: {ACTIONS[kind][0]}\nEnter /{kind} followed by your topic.", menu=True)
+        elif data == "status":
+            await send_message(chat_id, "Service online. Research provider: " + ("configured" if os.getenv("BRAVE_SEARCH_API_KEY") else "missing"), menu=True)
+        elif data == "help":
+            await send_message(chat_id, HELP, menu=True)
         else:
             await send_message(chat_id, menu_text(), menu=True)
 
