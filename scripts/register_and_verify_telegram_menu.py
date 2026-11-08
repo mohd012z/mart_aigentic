@@ -29,7 +29,7 @@ async def main():
             if verification.status_code != 200 or verification.json().get("ok") is not True:
                 raise RuntimeError("Telegram command verification rejected")
             actual = verification.json().get("result")
-        except (httpx.HTTPError, ValueError) from None:
+        except (httpx.HTTPError, ValueError):
             raise RuntimeError("Telegram registration/verification request failed") from None
     if actual != COMMANDS:
         raise RuntimeError("Registered command list does not match all 13 expected commands")
