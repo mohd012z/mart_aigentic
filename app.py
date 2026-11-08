@@ -47,9 +47,16 @@ async def telegram_webhook(request: Request, x_telegram_bot_api_secret_token: st
     if callback:
         chat = (callback.get("message") or {}).get("chat") or {}
         chat_id = chat.get("id")
-        answer = await answer_callback(callback, send=False, acknowledge=False)
+        answer = await answer_callback(callback, send=False, acknowledge=False, select_session=False)
         if chat_id and answer:
-            update_journal.prepare(uid, generation, chat_id, answer)
+            from_user = (callback.get("from") or {}).get("id")
+            chat_type = chat.get("type")
+            campaign_authorized = (callback.get("data") == "action:campaign"
+                and chat_type == "private" and type(from_user) is int
+                and type(chat_id) is int and from_user == chat_id)
+            update_journal.prepare_callback(uid, generation, chat_id, answer,
+                user=from_user if campaign_authorized else None,
+                action="campaign" if campaign_authorized else None)
             await acknowledge_callback(callback)
             if update_journal.begin_delivery(uid, generation):
                 await send_message(chat_id, answer, menu=True)
@@ -122,7 +129,7 @@ async def acknowledge_callback(callback):
         r = await client.post(f"https://api.telegram.org/bot{token}/answerCallbackQuery", json={"callback_query_id": callback["id"]})
         r.raise_for_status()
 
-async def answer_callback(callback, send=True, acknowledge=True):
+async def answer_callback(callback, send=True, acknowledge=True, select_session=True):
     if acknowledge:
         await acknowledge_callback(callback)
     data = callback.get("data", "")
