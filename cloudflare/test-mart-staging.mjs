@@ -1,0 +1,16 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import worker,{COMMANDS,keyboard,render} from "./mart-staging-worker.mjs";
+const env={TELEGRAM_WEBHOOK_SECRET:"test-secret",STAGING_ENABLE_DELIVERY:"false"};
+const req=(payload,secret="test-secret",path="/telegram/webhook")=>new Request("https://staging.example"+path,{method:"POST",headers:{"content-type":"application/json","X-Telegram-Bot-Api-Secret-Token":secret},body:JSON.stringify(payload)});
+test("13 commands and 11 inline buttons",()=>{assert.equal(COMMANDS.length,13);assert.equal(new Set(COMMANDS).size,13);assert.equal(keyboard().inline_keyboard.flat().length,11);});
+test("start preview never calls Telegram",async()=>{const r=await worker.fetch(req({update_id:1,message:{chat:{id:123},text:"/start"}}),env);assert.equal(r.status,200);assert.equal((await r.json()).preview,true);});
+test("callback preview",async()=>{const r=await worker.fetch(req({update_id:2,callback_query:{id:"abc",data:"action:research",message:{chat:{id:123}}}}),env);assert.equal((await r.json()).preview,true);});
+test("wrong secret",async()=>{assert.equal((await worker.fetch(req({update_id:3},"bad"),env)).status,403);});
+test("missing secret configuration fails closed",async()=>{assert.equal((await worker.fetch(req({update_id:3}),{STAGING_ENABLE_DELIVERY:"false"})).status,403);});
+test("missing update id",async()=>{assert.equal((await worker.fetch(req({message:{chat:{id:123},text:"/start"}}),env)).status,400);});
+test("invalid payload",async()=>{assert.equal((await worker.fetch(req({update_id:"5"}),env)).status,400);});
+test("unknown path",async()=>{assert.equal((await worker.fetch(req({update_id:1},undefined,"/unknown"),env)).status,404);});
+test("non-text update ignored",async()=>{const r=await worker.fetch(req({update_id:4,message:{chat:{id:123}}}),env);assert.equal((await r.json()).handled,false);});
+test("staging never creates campaigns",()=>{assert.match(render({message:{chat:{id:123},text:"/campaign x"}}).text,/Python service/);});
+test("delivery requires token",async()=>{const r=await worker.fetch(req({update_id:5,message:{chat:{id:123},text:"/start"}}),{...env,STAGING_ENABLE_DELIVERY:"true"});assert.equal(r.status,503);});
