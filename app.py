@@ -66,7 +66,7 @@ async def telegram_webhook(request: Request, x_telegram_bot_api_secret_token: st
     cmd = cmd.split("@", 1)[0].lower()
     if cmd == "/campaign":
         if arg.strip():
-            cid = campaigns.create(chat_id, arg.strip())
+            cid = campaigns.create(chat_id, arg.strip(), uid)
             answer = f"Campaign queued: {cid}. Use /campaignstatus {cid} to check. Publishing requires approval."
         else:
             campaigns.select(chat_id, message.get("from", {}).get("id"), "campaign")
@@ -75,7 +75,7 @@ async def telegram_webhook(request: Request, x_telegram_bot_api_secret_token: st
         row = campaigns.get(arg.strip(), chat_id)
         answer = f"Campaign {arg.strip()}: {row[0]}\\n{row[1][:3200]}" if row else "Campaign not found."
     elif not content.startswith("/") and campaigns.consume(chat_id, message.get("from", {}).get("id")) == "campaign":
-        cid = campaigns.create(chat_id, content)
+        cid = campaigns.create(chat_id, content, uid)
         answer = f"Campaign queued: {cid}. Use /campaignstatus {cid} to check."
     elif cmd in ("/start", "/menu"):
         answer = menu_text()
