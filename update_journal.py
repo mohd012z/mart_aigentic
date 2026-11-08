@@ -1,68 +1,70 @@
-"""Durable, conservative Telegram update journal.
-
-An outbound request that may have reached Telegram is never blindly retried.
-Operators must reconcile delivery_uncertain records manually.
-"""
+"""SQLite update journal with generation-fenced ownership and conservative delivery."""
 import os
 import sqlite3
 import time
 from contextlib import closing
 
-DB_ENV = "MART_CAMPAIGN_DB"
-
 def connect():
-    db = os.getenv(DB_ENV, "mart_campaigns.sqlite3")
-    c = sqlite3.connect(db, timeout=10)
+    c = sqlite3.connect(os.getenv("MART_CAMPAIGN_DB", "mart_campaigns.sqlite3"), timeout=10)
     c.execute("PRAGMA busy_timeout=10000")
     c.execute("""CREATE TABLE IF NOT EXISTS update_journal(
-        id INTEGER PRIMARY KEY, state TEXT NOT NULL,
-        lease_until REAL NOT NULL DEFAULT 0,
-        chat INTEGER, reply TEXT, updated REAL NOT NULL)""")
+        id INTEGER PRIMARY KEY, state TEXT NOT NULL, lease_until REAL NOT NULL DEFAULT 0,
+        chat INTEGER, reply TEXT, updated REAL NOT NULL, generation INTEGER NOT NULL DEFAULT 0)""")
+    columns = {r[1] for r in c.execute("PRAGMA table_info(update_journal)")}
+    if "generation" not in columns:
+        c.execute("ALTER TABLE update_journal ADD COLUMN generation INTEGER NOT NULL DEFAULT 0")
     c.commit()
     return c
 
 def claim(uid, lease_seconds=120, now=None):
-    if not isinstance(uid, int) or isinstance(uid, bool):
-        raise ValueError("invalid update ID")
+    if type(uid) is not int or uid < 0 or lease_seconds <= 0:
+        raise ValueError("invalid update claim")
     now = time.time() if now is None else now
     with closing(connect()) as c:
         c.execute("BEGIN IMMEDIATE")
-        row = c.execute("SELECT state,lease_until FROM update_journal WHERE id=?", (uid,)).fetchone()
+        row = c.execute("SELECT state,lease_until,generation FROM update_journal WHERE id=?", (uid,)).fetchone()
         if row is None:
-            c.execute("INSERT INTO update_journal(id,state,lease_until,updated) VALUES(?,'processing',?,?)",
-                      (uid, now + lease_seconds, now))
-            outcome = "process"
+            generation = 1
+            c.execute("INSERT INTO update_journal(id,state,lease_until,updated,generation) VALUES(?,'processing',?,?,?)",
+                      (uid, now + lease_seconds, now, generation))
+            result = ("process", generation)
         elif row[0] == "processing" and row[1] <= now:
-            c.execute("UPDATE update_journal SET lease_until=?,updated=? WHERE id=?",
-                      (now + lease_seconds, now, uid))
-            outcome = "process"
+            generation = row[2] + 1
+            c.execute("UPDATE update_journal SET lease_until=?,updated=?,generation=? WHERE id=?",
+                      (now + lease_seconds, now, generation, uid))
+            result = ("process", generation)
         else:
-            outcome = row[0]
+            result = (row[0], None)
         c.commit()
-        return outcome
+        return result
 
-def prepare(uid, chat, reply):
+def prepare(uid, generation, chat, reply):
     with closing(connect()) as c:
         c.execute("BEGIN IMMEDIATE")
         changed = c.execute("""UPDATE update_journal SET state='reply_pending',chat=?,reply=?,updated=?
-            WHERE id=? AND state='processing'""", (chat, reply, time.time(), uid)).rowcount
+            WHERE id=? AND generation=? AND state='processing' AND lease_until>?""",
+            (chat, reply, time.time(), uid, generation, time.time())).rowcount
         c.commit()
         if changed != 1:
-            raise RuntimeError("update lease state changed")
+            raise RuntimeError("stale or expired update owner")
 
-def begin_delivery(uid):
+def begin_delivery(uid, generation):
     with closing(connect()) as c:
         c.execute("BEGIN IMMEDIATE")
         changed = c.execute("""UPDATE update_journal SET state='delivery_uncertain',updated=?
-            WHERE id=? AND state='reply_pending'""", (time.time(), uid)).rowcount
+            WHERE id=? AND generation=? AND state='reply_pending'""",
+            (time.time(), uid, generation)).rowcount
         c.commit()
         return changed == 1
 
-def delivered(uid):
+def delivered(uid, generation):
     with closing(connect()) as c:
-        c.execute("UPDATE update_journal SET state='delivered',updated=? WHERE id=? AND state='delivery_uncertain'",
-                  (time.time(), uid))
+        c.execute("BEGIN IMMEDIATE")
+        changed = c.execute("""UPDATE update_journal SET state='delivered',updated=?
+            WHERE id=? AND generation=? AND state='delivery_uncertain'""",
+            (time.time(), uid, generation)).rowcount
         c.commit()
+        return changed == 1
 
 def recoverable(now=None):
     now = time.time() if now is None else now
