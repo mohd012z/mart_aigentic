@@ -6,6 +6,7 @@ from mart_engine import research
 from telegram_ui import ACTIONS, keyboard, menu_text
 from observability import record, report
 import campaigns
+import update_journal
 import time
 
 app = FastAPI(title="MART Agentic Research")
@@ -36,16 +37,30 @@ async def telegram_webhook(request: Request, x_telegram_bot_api_secret_token: st
     if not secret or not hmac.compare_digest(x_telegram_bot_api_secret_token or "", secret):
         raise HTTPException(status_code=403, detail="Forbidden")
     update = await request.json()
-    if "update_id" in update and not campaigns.accept_update(update["update_id"]):
-        return {"ok": True}
+    uid = update.get("update_id")
+    if uid is None:
+        raise HTTPException(status_code=400, detail="Missing update ID")
+    state = update_journal.claim(uid)
+    if state != "process":
+        return {"ok": True, "journal_state": state}
     callback = update.get("callback_query")
     if callback:
-        await answer_callback(callback)
+        chat = (callback.get("message") or {}).get("chat") or {}
+        chat_id = chat.get("id")
+        answer = await answer_callback(callback, send=False)
+        if chat_id and answer:
+            update_journal.prepare(uid, chat_id, answer)
+            if update_journal.begin_delivery(uid):
+                await send_message(chat_id, answer, menu=True)
+                update_journal.delivered(uid)
         return {"ok": True}
     message = update.get("message") or {}
     chat_id = (message.get("chat") or {}).get("id")
     content = message.get("text", "").strip()
     if not chat_id or not content:
+        update_journal.prepare(uid, chat_id, "")
+        update_journal.begin_delivery(uid)
+        update_journal.delivered(uid)
         return {"ok": True}
     cmd, _, arg = content.partition(" ")
     cmd = cmd.split("@", 1)[0].lower()
@@ -88,10 +103,13 @@ async def telegram_webhook(request: Request, x_telegram_bot_api_secret_token: st
         answer = await research(arg.strip()) if arg.strip() else "Usage: " + cmd + " <topic>"
     else:
         answer = HELP
-    await send_message(chat_id, answer, menu=True)
+    update_journal.prepare(uid, chat_id, answer)
+    if update_journal.begin_delivery(uid):
+        await send_message(chat_id, answer, menu=True)
+        update_journal.delivered(uid)
     return {"ok": True}
 
-async def answer_callback(callback):
+async def answer_callback(callback, send=True):
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
     if not token:
         raise RuntimeError("TELEGRAM_BOT_TOKEN missing")
@@ -101,19 +119,27 @@ async def answer_callback(callback):
     async with httpx.AsyncClient(timeout=10) as client:
         r = await client.post(f"https://api.telegram.org/bot{token}/answerCallbackQuery", json={"callback_query_id": callback["id"]})
         r.raise_for_status()
-    if chat_id:
-        if kind == "campaign":
-            user_id = (callback.get("from") or {}).get("id")
-            campaigns.select(chat_id, user_id, "campaign")
-            await send_message(chat_id, "Send a product or business topic to create a campaign.", menu=True)
-        elif kind in ACTIONS:
-            await send_message(chat_id, f"Selected: {ACTIONS[kind][0]}\nEnter /{kind} followed by your topic.", menu=True)
-        elif data == "status":
-            await send_message(chat_id, "Service online. Research provider: " + ("configured" if os.getenv("BRAVE_SEARCH_API_KEY") else "missing"), menu=True)
-        elif data == "help":
-            await send_message(chat_id, HELP, menu=True)
+    if not chat_id:
+        return None
+    if kind == "campaign":
+        user_id = (callback.get("from") or {}).get("id")
+        chat_type = ((callback.get("message") or {}).get("chat") or {}).get("type")
+        if chat_type != "private" or not user_id or user_id != chat_id:
+            message = "Campaign creation is available in your private chat only."
         else:
-            await send_message(chat_id, menu_text(), menu=True)
+            campaigns.select(chat_id, user_id, "campaign")
+            message = "Send a product or business topic to create a campaign."
+    elif kind in ACTIONS:
+        message = f"Selected: {ACTIONS[kind][0]}\\nEnter /{kind} followed by your topic."
+    elif data == "status":
+        message = "Service online. Research provider: " + ("configured" if os.getenv("BRAVE_SEARCH_API_KEY") else "missing")
+    elif data == "help":
+        message = HELP
+    else:
+        message = menu_text()
+    if send:
+        await send_message(chat_id, message, menu=True)
+    return message
 
 def create_draft(kind, topic):
     topic = topic[:250]
