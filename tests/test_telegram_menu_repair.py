@@ -37,7 +37,6 @@ class TelegramMenuTests(unittest.TestCase):
         for data, expected in (("status", "Service online"), ("help", "MART Research Bot")):
             with self.subTest(data=data), patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "test-token"}), patch("httpx.AsyncClient.post", new_callable=AsyncMock) as post, patch.object(app, "send_message", new_callable=AsyncMock) as send:
                 post.return_value.raise_for_status = lambda: None
-                self.client.post("/telegram/webhook", headers={"X-Telegram-Bot-Api-Secret-Token": "test-secret"}, json={}) if False else None
                 import asyncio
                 asyncio.run(app.answer_callback({"id": "callback", "data": data, "message": {"chat": {"id": 123}}}))
                 self.assertIn(expected, send.await_args.args[1])
