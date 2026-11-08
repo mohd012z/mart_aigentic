@@ -99,6 +99,19 @@ class TelegramMenuTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue({"menu", "start", "help", "status", *ACTIONS}.issubset(commands))
         self.assertIn("slash shortcut", menu_text())
 
+    async def test_campaign_shortcut_starts_campaign_input(self):
+        await self.call_webhook(5, "/campaign")
+        self.assertIn("Send the product or business topic", self.send.await_args.args[1])
+
+    async def test_action_shortcuts_return_usage_without_topic(self):
+        update_id = 10
+        for command in sorted(ACTIONS):
+            if command == "campaign":
+                continue
+            await self.call_webhook(update_id, "/" + command)
+            self.assertIn("Use /" + command, self.send.await_args.args[1])
+            update_id += 1
+
     async def test_unknown_callback_returns_menu_without_network(self):
         with patch("app.httpx.AsyncClient", return_value=FakeTelegramClient()):
             await app.answer_callback({
