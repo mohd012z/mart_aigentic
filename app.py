@@ -63,11 +63,11 @@ async def telegram_webhook(request: Request, x_telegram_bot_api_secret_token: st
         cid = campaigns.create(chat_id, content)
         answer = f"Campaign queued: {cid}. Use /campaignstatus {cid} to check."
     elif cmd in ("/start", "/help", "/menu"):
-        answer = HELP
+        answer = menu_text() if cmd != "/help" else HELP + "\n/menu — open the MART tools"
     elif cmd in ("/usage", "/quality", "/agentstatus", "/report"):
         answer = report()
     elif cmd == "/status":
-        answer = "Service online. Research provider: " + ("configured" if os.getenv("BRAVE_SEARCH_API_KEY") else "missing")
+        answer = status_text()
     elif cmd.lstrip("/") in ACTIONS:
         kind = cmd.lstrip("/")
         if not arg.strip():
@@ -89,6 +89,11 @@ async def telegram_webhook(request: Request, x_telegram_bot_api_secret_token: st
     await send_message(chat_id, answer, menu=True)
     return {"ok": True}
 
+def status_text():
+    provider = "configured" if os.getenv("BRAVE_SEARCH_API_KEY") else "missing"
+    return "Service online. Research provider: " + provider
+
+
 async def answer_callback(callback):
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
     if not token:
@@ -104,6 +109,10 @@ async def answer_callback(callback):
             user_id = (callback.get("from") or {}).get("id")
             campaigns.select(chat_id, user_id, "campaign")
             await send_message(chat_id, "Send a product or business topic to create a campaign.", menu=True)
+        elif data == "status":
+            await send_message(chat_id, status_text(), menu=True)
+        elif data == "help":
+            await send_message(chat_id, HELP + "\n/menu — open the MART tools", menu=True)
         elif kind in ACTIONS:
             await send_message(chat_id, f"Selected: {ACTIONS[kind][0]}\nEnter /{kind} followed by your topic.", menu=True)
         else:
