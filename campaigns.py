@@ -38,3 +38,28 @@ def finish(cid,output,success=True):
 def get(cid,chat):
     with closing(conn()) as c:
         return c.execute("SELECT status,output FROM campaigns WHERE id=? AND chat=?",(cid,chat)).fetchone()
+
+def consume_and_create(chat, user, topic, update_id):
+    """Atomically consume campaign session and insert a retry-safe campaign."""
+    if not isinstance(topic, str) or not 1 <= len(topic.strip()) <= 300:
+        raise ValueError("Invalid topic")
+    if type(update_id) is not int or update_id < 0:
+        raise ValueError("Invalid update ID")
+    cid = f"u{update_id:x}"
+    with closing(conn()) as c:
+        c.execute("BEGIN IMMEDIATE")
+        existing = c.execute("SELECT chat,topic FROM campaigns WHERE id=?", (cid,)).fetchone()
+        if existing:
+            if existing != (chat, topic.strip()):
+                raise ValueError("Update ID collision")
+            c.commit()
+            return cid
+        row = c.execute("SELECT action FROM sessions WHERE chat=? AND user=?", (chat,user)).fetchone()
+        if not row or row[0] != "campaign":
+            c.commit()
+            return None
+        c.execute("INSERT INTO campaigns(id,chat,topic,status) VALUES(?,?,?,'queued')",
+                  (cid,chat,topic.strip()))
+        c.execute("DELETE FROM sessions WHERE chat=? AND user=?", (chat,user))
+        c.commit()
+        return cid
