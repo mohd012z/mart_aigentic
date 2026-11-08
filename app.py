@@ -47,12 +47,17 @@ async def telegram_webhook(request: Request, x_telegram_bot_api_secret_token: st
     if callback:
         chat = (callback.get("message") or {}).get("chat") or {}
         chat_id = chat.get("id")
-        answer = await answer_callback(callback, send=False)
+        answer = await answer_callback(callback, send=False, acknowledge=False)
         if chat_id and answer:
             update_journal.prepare(uid, generation, chat_id, answer)
+            await acknowledge_callback(callback)
             if update_journal.begin_delivery(uid, generation):
                 await send_message(chat_id, answer, menu=True)
                 update_journal.delivered(uid, generation)
+        else:
+            update_journal.prepare(uid, generation, chat_id, "")
+            update_journal.begin_delivery(uid, generation)
+            update_journal.delivered(uid, generation)
         return {"ok": True}
     message = update.get("message") or {}
     chat_id = (message.get("chat") or {}).get("id")
@@ -74,9 +79,9 @@ async def telegram_webhook(request: Request, x_telegram_bot_api_secret_token: st
     elif cmd == "/campaignstatus":
         row = campaigns.get(arg.strip(), chat_id)
         answer = f"Campaign {arg.strip()}: {row[0]}\\n{row[1][:3200]}" if row else "Campaign not found."
-    elif not content.startswith("/") and campaigns.consume(chat_id, message.get("from", {}).get("id")) == "campaign":
-        cid = campaigns.create(chat_id, content, uid)
-        answer = f"Campaign queued: {cid}. Use /campaignstatus {cid} to check."
+    elif not content.startswith("/"):
+        cid = campaigns.consume_and_create(chat_id, message.get("from", {}).get("id"), content, uid)
+        answer = f"Campaign queued: {cid}. Use /campaignstatus {cid} to check." if cid else HELP
     elif cmd in ("/start", "/menu"):
         answer = menu_text()
     elif cmd == "/help":
@@ -109,16 +114,20 @@ async def telegram_webhook(request: Request, x_telegram_bot_api_secret_token: st
         update_journal.delivered(uid, generation)
     return {"ok": True}
 
-async def answer_callback(callback, send=True):
+async def acknowledge_callback(callback):
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
     if not token:
         raise RuntimeError("TELEGRAM_BOT_TOKEN missing")
-    data = callback.get("data", "")
-    kind = data.removeprefix("action:")
-    chat_id = (callback.get("message") or {}).get("chat", {}).get("id")
     async with httpx.AsyncClient(timeout=10) as client:
         r = await client.post(f"https://api.telegram.org/bot{token}/answerCallbackQuery", json={"callback_query_id": callback["id"]})
         r.raise_for_status()
+
+async def answer_callback(callback, send=True, acknowledge=True):
+    if acknowledge:
+        await acknowledge_callback(callback)
+    data = callback.get("data", "")
+    kind = data.removeprefix("action:")
+    chat_id = (callback.get("message") or {}).get("chat", {}).get("id")
     if not chat_id:
         return None
     if kind == "campaign":
