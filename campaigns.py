@@ -20,11 +20,11 @@ def consume(chat,user):
         row=c.execute("SELECT action FROM sessions WHERE chat=? AND user=?",(chat,user)).fetchone()
         c.execute("DELETE FROM sessions WHERE chat=? AND user=?",(chat,user));c.commit()
         return row[0] if row else None
-def create(chat,topic):
+def create(chat,topic,update_id=None):
     if not 1<=len(topic.strip())<=300: raise ValueError("Invalid topic")
-    cid=uuid.uuid4().hex[:12]
+    cid=(f'u{update_id:x}' if update_id is not None else uuid.uuid4().hex[:12])
     with closing(conn()) as c:
-        c.execute("INSERT INTO campaigns(id,chat,topic,status) VALUES(?,?,?,'queued')",(cid,chat,topic.strip()));c.commit()
+        c.execute("INSERT OR IGNORE INTO campaigns(id,chat,topic,status) VALUES(?,?,?,'queued')",(cid,chat,topic.strip()));c.commit()
     return cid
 def claim():
     with closing(conn()) as c:
