@@ -1,5 +1,8 @@
 """Regression tests for MART Telegram menu and callback routing (offline)."""
 import unittest
+import tempfile
+import os
+import update_journal
 from unittest.mock import AsyncMock, patch
 from fastapi.testclient import TestClient
 import app
@@ -7,7 +10,14 @@ from telegram_ui import COMMANDS, keyboard
 
 class TelegramMenuTests(unittest.TestCase):
     def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.env = patch.dict(os.environ, {'MART_CAMPAIGN_DB': os.path.join(self.tmp.name, 'test.sqlite')})
+        self.env.start()
         self.client = TestClient(app.app)
+
+    def tearDown(self):
+        self.env.stop()
+        self.tmp.cleanup()
 
     def test_command_registry_unique_and_valid(self):
         names = [item["command"] for item in COMMANDS]
