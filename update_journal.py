@@ -10,6 +10,7 @@ def connect():
     c.execute("""CREATE TABLE IF NOT EXISTS update_journal(
         id INTEGER PRIMARY KEY, state TEXT NOT NULL, lease_until REAL NOT NULL DEFAULT 0,
         chat INTEGER, reply TEXT, updated REAL NOT NULL, generation INTEGER NOT NULL DEFAULT 0)""")
+    c.execute("BEGIN IMMEDIATE")
     columns = {r[1] for r in c.execute("PRAGMA table_info(update_journal)")}
     if "generation" not in columns:
         c.execute("ALTER TABLE update_journal ADD COLUMN generation INTEGER NOT NULL DEFAULT 0")
@@ -51,9 +52,10 @@ def prepare(uid, generation, chat, reply):
 def begin_delivery(uid, generation):
     with closing(connect()) as c:
         c.execute("BEGIN IMMEDIATE")
+        now = time.time()
         changed = c.execute("""UPDATE update_journal SET state='delivery_uncertain',updated=?
-            WHERE id=? AND generation=? AND state='reply_pending'""",
-            (time.time(), uid, generation)).rowcount
+            WHERE id=? AND generation=? AND state='reply_pending' AND lease_until>?""",
+            (now, uid, generation, now)).rowcount
         c.commit()
         return changed == 1
 
