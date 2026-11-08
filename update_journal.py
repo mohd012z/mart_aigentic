@@ -74,3 +74,32 @@ def recoverable(now=None):
         return c.execute("""SELECT id,state FROM update_journal
             WHERE (state='processing' AND lease_until<=?) OR state IN ('reply_pending','delivery_uncertain')
             ORDER BY id""", (now,)).fetchall()
+
+def prepare_callback(uid, generation, chat, reply, user=None, action=None):
+    """Commit callback reply and optional session selection in one SQLite transaction.
+
+    Generation and lease validation precede all side effects. A failed transaction
+    rolls back both the journal transition and the session selection.
+    """
+    now = time.time()
+    with closing(connect()) as c:
+        c.execute("BEGIN IMMEDIATE")
+        owner = c.execute("""SELECT 1 FROM update_journal
+            WHERE id=? AND generation=? AND state='processing' AND lease_until>?""",
+            (uid, generation, now)).fetchone()
+        if not owner:
+            raise RuntimeError("stale or expired callback owner")
+        if action is not None:
+            if action != "campaign" or type(chat) is not int or type(user) is not int or chat != user:
+                raise ValueError("unauthorized callback selection")
+            c.execute("""CREATE TABLE IF NOT EXISTS sessions(
+                chat INTEGER,user INTEGER,action TEXT,PRIMARY KEY(chat,user))""")
+            c.execute("INSERT OR REPLACE INTO sessions(chat,user,action) VALUES(?,?,?)",
+                      (chat, user, action))
+        changed = c.execute("""UPDATE update_journal
+            SET state='reply_pending',chat=?,reply=?,updated=?
+            WHERE id=? AND generation=? AND state='processing' AND lease_until>?""",
+            (chat, reply, now, uid, generation, now)).rowcount
+        if changed != 1:
+            raise RuntimeError("callback ownership lost")
+        c.commit()
