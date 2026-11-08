@@ -3,8 +3,8 @@ import tempfile
 import unittest
 from unittest.mock import AsyncMock, patch
 
-import campaigns
 import app
+import campaigns
 from telegram_ui import ACTIONS, COMMANDS, keyboard, menu_text
 
 
@@ -86,20 +86,26 @@ class TelegramMenuTests(unittest.IsolatedAsyncioTestCase):
             for row in markup
             for button in row
         }
-        self.assertEqual(callback_values, {f"action:{key}" for key in ACTIONS} | {"status", "help"})
-        self.assertTrue(all(len(value.encode("utf-8")) <= 64 for value in callback_values))
+        self.assertEqual(
+            callback_values,
+            {f"action:{key}" for key in ACTIONS} | {"status", "help"},
+        )
+        self.assertTrue(
+            all(len(value.encode("utf-8")) <= 64 for value in callback_values)
+        )
 
         commands = {item["command"] for item in COMMANDS}
         self.assertEqual(len(commands), len(COMMANDS))
         self.assertTrue({"menu", "start", "help", "status", *ACTIONS}.issubset(commands))
         self.assertIn("slash shortcut", menu_text())
 
-    async def test_unknown_callback_returns_menu(self):
-        with patch("app.httpx.AsyncClient", return_value=FakeTelegramClient()):\n            await app.answer_callback({
-            "id": "callback-1",
-            "data": "stale",
-            "message": {"chat": {"id": 100}},
-        })
+    async def test_unknown_callback_returns_menu_without_network(self):
+        with patch("app.httpx.AsyncClient", return_value=FakeTelegramClient()):
+            await app.answer_callback({
+                "id": "callback-1",
+                "data": "stale",
+                "message": {"chat": {"id": 100}},
+            })
         self.send.assert_awaited_once()
         self.assertIn("Choose a tool below", self.send.await_args.args[1])
 
