@@ -19,6 +19,8 @@ jobs:
           python-version: '3.12'
       - name: Install application dependencies
         run: python -m pip install -r requirements.txt
+      - name: Test staging Cloudflare Worker (offline)
+        run: node --test cloudflare/test-mart-staging.mjs
       - name: Compile Python sources
         run: python -m compileall -q scripts tests app.py update_journal.py campaigns.py
       - name: Run offline regression tests
