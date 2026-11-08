@@ -40,7 +40,7 @@ async def telegram_webhook(request: Request, x_telegram_bot_api_secret_token: st
     uid = update.get("update_id")
     if uid is None:
         raise HTTPException(status_code=400, detail="Missing update ID")
-    state = update_journal.claim(uid)
+    state, generation = update_journal.claim(uid)
     if state != "process":
         return {"ok": True, "journal_state": state}
     callback = update.get("callback_query")
@@ -49,18 +49,18 @@ async def telegram_webhook(request: Request, x_telegram_bot_api_secret_token: st
         chat_id = chat.get("id")
         answer = await answer_callback(callback, send=False)
         if chat_id and answer:
-            update_journal.prepare(uid, chat_id, answer)
-            if update_journal.begin_delivery(uid):
+            update_journal.prepare(uid, generation, chat_id, answer)
+            if update_journal.begin_delivery(uid, generation):
                 await send_message(chat_id, answer, menu=True)
-                update_journal.delivered(uid)
+                update_journal.delivered(uid, generation)
         return {"ok": True}
     message = update.get("message") or {}
     chat_id = (message.get("chat") or {}).get("id")
     content = message.get("text", "").strip()
     if not chat_id or not content:
-        update_journal.prepare(uid, chat_id, "")
-        update_journal.begin_delivery(uid)
-        update_journal.delivered(uid)
+        update_journal.prepare(uid, generation, chat_id, "")
+        update_journal.begin_delivery(uid, generation)
+        update_journal.delivered(uid, generation)
         return {"ok": True}
     cmd, _, arg = content.partition(" ")
     cmd = cmd.split("@", 1)[0].lower()
@@ -103,10 +103,10 @@ async def telegram_webhook(request: Request, x_telegram_bot_api_secret_token: st
         answer = await research(arg.strip()) if arg.strip() else "Usage: " + cmd + " <topic>"
     else:
         answer = HELP
-    update_journal.prepare(uid, chat_id, answer)
-    if update_journal.begin_delivery(uid):
+    update_journal.prepare(uid, generation, chat_id, answer)
+    if update_journal.begin_delivery(uid, generation):
         await send_message(chat_id, answer, menu=True)
-        update_journal.delivered(uid)
+        update_journal.delivered(uid, generation)
     return {"ok": True}
 
 async def answer_callback(callback, send=True):
