@@ -1,0 +1,11 @@
+name = "mart-telegram-research-staging"
+main = "mart-staging-worker.mjs"
+compatibility_date = "2026-11-08"
+workers_dev = true
+
+[vars]
+STAGING_ENABLE_DELIVERY = "false"
+
+# No routes, cron, D1, KV, or production bindings.
+# TELEGRAM_WEBHOOK_SECRET and TELEGRAM_BOT_TOKEN are secrets, never TOML values.
+# No webhook registration is performed by this Worker.
