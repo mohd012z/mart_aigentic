@@ -56,8 +56,27 @@ def main():
             if result.get("success") is not True:
                 print(f"FAILED: staging secret {name} was rejected")
                 return 1
-        except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, ValueError):
-            print(f"FAILED: staging secret {name} could not be synchronized")
+        except urllib.error.HTTPError as error:
+            # Only status and numeric Cloudflare codes; never print API response text.
+            codes = []
+            try:
+                payload = json.loads(error.read(8192))
+                for item in payload.get("errors", []):
+                    code = item.get("code")
+                    if isinstance(code, int):
+                        codes.append(code)
+            except (ValueError, TypeError, AttributeError):
+                pass
+            print(f"FAILED: staging secret {name}; HTTP {error.code}; Cloudflare codes {codes[:5]}")
+            if error.code in (401, 403):
+                print("ACTION: check API token Workers Scripts Edit scope and account restriction")
+            elif error.code == 404:
+                print("ACTION: check token account access and staging Worker visibility")
+            elif error.code == 400:
+                print("ACTION: check Cloudflare error codes and secret API compatibility")
+            return 1
+        except (urllib.error.URLError, TimeoutError, ValueError):
+            print(f"FAILED: staging secret {name}; network or invalid JSON response")
             return 1
         print(f"PASS: staging secret {name} synchronized")
     print("PASS: staging-only secret sync; no Telegram messages or webhook registration")
