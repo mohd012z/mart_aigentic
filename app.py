@@ -143,7 +143,8 @@ async def answer_callback(callback, send=True, acknowledge=True, select_session=
         if chat_type != "private" or not user_id or user_id != chat_id:
             message = "Campaign creation is available in your private chat only."
         else:
-            campaigns.select(chat_id, user_id, "campaign")
+            if select_session:
+                campaigns.select(chat_id, user_id, "campaign")
             message = "Send a product or business topic to create a campaign."
     elif kind in ACTIONS:
         message = f"Selected: {ACTIONS[kind][0]}\\nEnter /{kind} followed by your topic."
