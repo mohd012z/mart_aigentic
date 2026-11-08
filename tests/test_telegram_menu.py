@@ -38,7 +38,7 @@ class TelegramMenuTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
         campaigns.DB = os.path.join(self.temp_dir.name, "mart.sqlite3")
-        self.secret = patch.dict(os.environ, {"TELEGRAM_WEBHOOK_SECRET": "test-secret"})
+        self.secret = patch.dict(os.environ, {"TELEGRAM_WEBHOOK_SECRET": "test-secret", "TELEGRAM_BOT_TOKEN": "offline-test-token"})
         self.secret.start()
         self.addCleanup(self.secret.stop)
         self.send = AsyncMock()
