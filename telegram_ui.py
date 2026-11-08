@@ -1,5 +1,6 @@
 """Telegram keyboard and command registry."""
 COMMANDS = [
+    {"command":"menu","description":"Open the MART tools"},
     {"command":"campaign","description":"One-click marketing campaign"},
     {"command":"campaignstatus","description":"Check campaign progress"},
     {"command":"start","description":"Open MART dashboard"},
@@ -32,5 +33,11 @@ def keyboard():
     return {"inline_keyboard":rows}
 def menu_text():
     return ("🚀 MART Agentic Research & Marketing Studio\n\n"
-            "Choose a tool below. Then send your business, product, niche or campaign topic.\n"
+            "Choose a tool below or use a slash shortcut such as /research or /campaign.\n"
             "Research requires a configured search provider. Drafts are suggestions, not published ads.")
+
+
+if __name__ == "__main__":
+    # Paste this list into BotFather's Edit Commands screen for the staging bot.
+    for command in COMMANDS:
+        print(f"{command['command']} - {command['description']}")
