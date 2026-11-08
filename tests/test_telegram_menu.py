@@ -8,6 +8,24 @@ import app
 from telegram_ui import ACTIONS, COMMANDS, keyboard, menu_text
 
 
+class FakeTelegramResponse:
+    def raise_for_status(self):
+        return None
+
+
+class FakeTelegramClient:
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, traceback):
+        return False
+
+    async def post(self, url, json):
+        if not url.endswith("/answerCallbackQuery"):
+            raise AssertionError("Unexpected Telegram method")
+        return FakeTelegramResponse()
+
+
 class FakeRequest:
     def __init__(self, payload):
         self.payload = payload
@@ -77,7 +95,7 @@ class TelegramMenuTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("slash shortcut", menu_text())
 
     async def test_unknown_callback_returns_menu(self):
-        await app.answer_callback({
+        with patch("app.httpx.AsyncClient", return_value=FakeTelegramClient()):\n            await app.answer_callback({
             "id": "callback-1",
             "data": "stale",
             "message": {"chat": {"id": 100}},
