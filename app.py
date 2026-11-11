@@ -35,9 +35,97 @@ async def send_message(chat_id, message, menu=False):
             json={"chat_id": chat_id, "text": message[:4096], "disable_web_page_preview": True, **({"reply_markup": keyboard()} if menu else {})})
         response.raise_for_status()
 
+def ensure_affiliate_seed(db):
+    import affiliate_catalog
+    import os
+    seed_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "seeds", "forex_affiliate.json")
+    affiliate_catalog.seed_from_file(db, seed_path)
+
 @app.get("/health")
 async def health():
     return {"status": "ok", "research_provider_configured": bool(os.getenv("BRAVE_SEARCH_API_KEY"))}
+
+def render_bonus_list(db):
+    import forex_bonuses
+    bonuses = forex_bonuses.list_bonuses(db)
+    if not bonuses:
+        return ("💵 Forex No-Deposit Bonus\n\n"
+                "No active bonuses are stored right now. Use /forexbonus again later — "
+                "the list is refreshed when offers are re-verified.")
+    lines = ["💵 Forex No-Deposit Bonus — all current offers\n"]
+    for i, b in enumerate(bonuses, 1):
+        validity = b["validity"] or "ongoing (verify with broker)"
+        lines.append(f"{i}. {b['broker']}: {b['amount_text']} — {b['eligibility']}\n   "
+                     f"Valid: {validity} · verified {b['verified_at']}\n   {b['source_url']}")
+    lines.append("\n" + forex_bonuses.DISCLAIMER)
+    return "\n".join(lines)[:3900]
+
+def render_forexa(db, chat_id, text=""):
+    import affiliate_catalog
+    import sqlite3
+    import time as _t
+    parts = [p for p in text.split() if p]
+    verb = (parts[0].lower() if parts else "list")
+    if verb in ("", "list", "all"):
+        offers = affiliate_catalog.list_offers(db, limit=20, category="forex")
+        if not offers:
+            return (
+                "🔗 Forex Affiliate Links\n\n"
+                "No links stored yet.\n\n"
+                "Add one (name = one word):\n"
+                "/forexa add <name> <https://link>\n\n"
+                "Examples:\n"
+                "/forexa list — show all\n"
+                "/forexa share <Name|number> — copyable share text\n"
+                "/forexa remove <Name|number>")
+        lines = [f"🔗 Your forex affiliate links ({len(offers)})\n"]
+        for i, o in enumerate(offers, 1):
+            lines.append(f"{i}. {o['merchant']} — {o['title']}\n{ o['url']}")
+        lines.append("\n/forexa share <number or name> for copyable text · /forexa remove <number or name>")
+        return "\n".join(lines)[:3900]
+    if verb == "add":
+        if len(parts) < 3:
+            return "Usage: /forexa add <name> <https://link>\n(name = one word, e.g. fxprime or xm-my)"
+        name = parts[1][:120]
+        url = parts[2]
+        if not url.startswith("https://"):
+            return "The link must start with https:// — e.g. /forexa add xm https://broker.com/?partner=123"
+        try:
+            affiliate_catalog.add_offer(db, name, name, url, url,
+                _t.strftime("%Y-%m-%d"), category="forex")
+        except Exception:
+            return "Could not store that link. It must be an https:// URL (e.g. https://broker.com/?partner=123)."
+        return f"✅ Stored '{name}'.\n{url}\n\n/forexa list to see all · /forexa share {len(affiliate_catalog.list_offers(db, 20, 'forex'))} to share it."
+    if verb == "share":
+        offers = affiliate_catalog.list_offers(db, limit=20, category="forex")
+        if not parts[1:]:
+            return "Usage: /forexa share <number or name>"
+        key = parts[1].lower()
+        match = None
+        for i, o in enumerate(offers, 1):
+            if key == str(i) or o["merchant"].lower() == key or o["title"].lower() == key:
+                match = o
+                break
+        if not match:
+            return "Link not found. /forexa list to see numbers and names."
+        return (
+            f"Copy & share:\n\n"
+            f"📈 {match['merchant']}: {match['title']}\n{match['url']}\n\n"
+            + affiliate_catalog.ADD_DISCLOSURE
+        )[:3900]
+    if verb == "remove":
+        offers = affiliate_catalog.list_offers(db, limit=20, category="forex")
+        if not parts[1:]:
+            return "Usage: /forexa remove <number or name>"
+        key = parts[1].lower()
+        with sqlite3.connect(db) as c:
+            for i, o in enumerate(offers, 1):
+                if key == str(i) or o["merchant"].lower() == key or o["title"].lower() == key:
+                    c.execute("UPDATE offers SET active=0 WHERE id=?", (o["id"],))
+                    c.commit()
+                    return f"🗑 Removed '{o['merchant']}'."
+        return "Link not found. /forexa list to see numbers and names."
+    return "Forex affiliate links: /forexa list · /forexa add <Name> <url> · /forexa share <name> · /forexa remove <name>"
 
 @app.post("/telegram/webhook")
 async def telegram_webhook(request: Request, x_telegram_bot_api_secret_token: str | None = Header(default=None)):
@@ -106,6 +194,20 @@ async def telegram_webhook(request: Request, x_telegram_bot_api_secret_token: st
         answer = report()
     elif cmd == "/status":
         answer = "Service online. Research provider: " + ("configured" if os.getenv("BRAVE_SEARCH_API_KEY") else "missing")
+    elif cmd == "/forexbonus":
+        import forex_bonuses
+        db = os.getenv("MART_BONUS_DB", "mart_bonuses.sqlite3")
+        forex_bonuses.seed(db)
+        answer = render_bonus_list(db)
+    elif cmd == "/forexa":
+        db = os.getenv("MART_AFFILIATE_DB", "mart_offers.sqlite3")
+        ensure_affiliate_seed(db)
+        from_user = message.get("from", {}).get("id")
+        chat_type = (message.get("chat") or {}).get("type")
+        if chat_type != "private" or not from_user or from_user != chat_id:
+            answer = "Forex affiliate links are stored per private chat only. Use /forexa in your private chat with the bot."
+        else:
+            answer = render_forexa(db, chat_id, arg)
     elif cmd.lstrip("/") in ACTIONS:
         kind = cmd.lstrip("/")
         if not arg.strip():

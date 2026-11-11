@@ -11,6 +11,8 @@ COMMANDS = [
     {"command": "social", "description": "Draft social media content"},
     {"command": "video", "description": "Draft short-video script"},
     {"command": "affiliate", "description": "Research affiliate products"},
+    {"command": "forexbonus", "description": "List all current forex no-deposit bonuses"},
+    {"command": "forexa", "description": "Store/list/share forex affiliate links (forexa add <name> <url>)"},
     {"command": "status", "description": "Check service configuration"},
     {"command": "help", "description": "Show command instructions"},
 ]
@@ -23,6 +25,8 @@ ACTIONS = {
     "social": ("📱 Social Posts", "Social content"),
     "video": ("🎬 Video Script", "Short-video script"),
     "affiliate": ("🛍 Affiliate", "Affiliate research"),
+    "forexbonus": ("💵 Forex No-Deposit Bonus", "Forex bonus list"),
+    "forexa": ("🔗 Forex Affiliate Links", "Forex affiliate links"),
 }
 def keyboard():
     pairs = list(ACTIONS.items())
@@ -46,7 +50,8 @@ def menu_text():
         "📣 Marketing, ads, social and video drafts\n"
         "🛍 Affiliate research (verified catalog + evidence)\n"
         "🚀 Campaign preparation and review\n"
-        "📈 /metrics — usage & cost ledger\n\n"
+        "📈 /metrics — usage & cost ledger\n"
+        "💵 Forex no-deposit bonus list + 📇 affiliate links\n\n"
         "🔒 Research mode: no automatic publishing or live campaign delivery.\n"
         "Use /help for examples."
     )

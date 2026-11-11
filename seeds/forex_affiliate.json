@@ -1,0 +1,28 @@
+{
+  "forex": [
+    {
+      "merchant": "justmarkets",
+      "title": "JustMarkets",
+      "url": "https://one.justmarkets.link/a/pqgpr0vvea",
+      "source_url": "https://one.justmarkets.link/a/pqgpr0vvea",
+      "commission_text": null,
+      "verified_at": "2026-11-11"
+    },
+    {
+      "merchant": "fbs",
+      "title": "FBS",
+      "url": "https://fbs.partners?ibl=189965&ibp=1139886",
+      "source_url": "https://fbs.partners?ibl=189965&ibp=1139886",
+      "commission_text": null,
+      "verified_at": "2026-11-11"
+    },
+    {
+      "merchant": "roboforex",
+      "title": "RoboForex",
+      "url": "https://my.roboinvesting.pro/en/?a=eree",
+      "source_url": "https://my.roboinvesting.pro/en/?a=eree",
+      "commission_text": null,
+      "verified_at": "2026-11-11"
+    }
+  ]
+}
