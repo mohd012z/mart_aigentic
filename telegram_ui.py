@@ -10,6 +10,10 @@ COMMANDS = [
     {"command":"social","description":"Create social media posts"},
     {"command":"video","description":"Create short-video script"},
     {"command":"affiliate","description":"Research affiliate opportunities"},
+    {"command":"affiliatecopy","description":"Create 10 affiliate copy drafts"},
+    {"command":"affiliatedrafts","description":"View saved affiliate drafts"},
+    {"command":"affiliatelang","description":"Set draft language: ms or en"},
+    {"command":"affiliateprompt","description":"Save editorial guidance"},
     {"command":"status","description":"Check research service"},
     {"command":"help","description":"Show instructions"},
 ]
@@ -22,6 +26,7 @@ ACTIONS = {
     "social": ("📱 Social posts", "Social content"),
     "video": ("🎬 Video script", "Short-video script"),
     "affiliate": ("🛍 Affiliate", "Affiliate research"),
+    "affiliatecopy": ("✍️ Affiliate drafts", "Bilingual affiliate copy"),
 }
 def keyboard():
     items=list(ACTIONS.items())
