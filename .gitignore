@@ -5,3 +5,14 @@ __pycache__/
 *.sqlite
 .env
 .wrangler/
+
+# local deployment infra (not part of the app)
+/gw/
+cloudflared.json
+tunnel-token.txt
+tunnel.yml
+e2e-sweep.py
+claim-route.py
+create-proxy-worker.py
+set-tunnel-binding.py
+deploy-local.txt
