@@ -35,7 +35,7 @@ class TelegramMenuTests(unittest.TestCase):
             with self.subTest(command=command), patch.dict("os.environ", {"TELEGRAM_WEBHOOK_SECRET": "test-secret"}), patch.object(app.campaigns, "accept_update", return_value=True), patch.object(app, "send_message", new_callable=AsyncMock) as send:
                 response = self.client.post("/telegram/webhook", headers={"X-Telegram-Bot-Api-Secret-Token": "test-secret"}, json={"update_id": index, "message": {"chat": {"id": 123}, "text": command}})
                 self.assertEqual(response.status_code, 200)
-                self.assertIn("MART Agentic", send.await_args.args[1])
+                self.assertIn("AI Research & Marketing Studio", send.await_args.args[1])
                 self.assertTrue(send.await_args.kwargs["menu"])
 
     def test_reject_missing_secret(self):
