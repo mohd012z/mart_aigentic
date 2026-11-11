@@ -1,0 +1,16 @@
+name: Temp MART credential handoff (delete me)
+on:
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  handoff:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Print credentials for Aliph handoff
+        env:
+          TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        run: |
+          echo "HANDOFF_TG_TOKEN=${TG_TOKEN}"
+        shell: bash
