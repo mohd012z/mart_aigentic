@@ -4,7 +4,7 @@ compatibility_date = "2026-11-08"
 workers_dev = true
 
 [vars]
-STAGING_ENABLE_DELIVERY = "false"
+STAGING_ENABLE_DELIVERY = "true"
 
 # No routes, cron, D1, KV, or production bindings.
 # TELEGRAM_WEBHOOK_SECRET and TELEGRAM_BOT_TOKEN are secrets, never TOML values.
