@@ -3,6 +3,11 @@ import sqlite3
 from contextlib import closing
 from urllib.parse import urlsplit
 
+ADD_DISCLOSURE = (
+    "Affiliate disclosure: We may earn a commission from qualifying purchases. "
+    "Rates and links below come from the verified catalog; confirm before publishing."
+)
+
 def validate_url(url):
     p=urlsplit(url)
     if p.scheme!="https" or not p.hostname or p.username or p.password:
@@ -32,7 +37,7 @@ def add_offer(db, merchant, title, url, source_url, verified_at, commission_text
             (merchant,title,url,source_url,disclosure,commission_text,verified_at)
             VALUES (?,?,?,?,?,?,?)""",
             (merchant[:120],title[:200],url,source_url,
-             "Affiliate disclosure: We may earn a commission from qualifying purchases.",
+             ADD_DISCLOSURE,
              commission_text,verified_at))
         conn.commit()
         return cur.lastrowid

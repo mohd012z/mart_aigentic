@@ -14,9 +14,9 @@ export function keyboard() {
   return {inline_keyboard:rows};
 }
 export function menuText() {
-  return "🚀 MART | AI Research & Marketing Studio\n\nChoose a tool below or type a command.\n\n🔎 Research & recommendations\n📣 Marketing, ads, social and video drafts\n🛍 Affiliate research\n🚀 Campaign preparation and review\n\n🔒 Research mode: no automatic publishing or live campaign delivery.\nUse /help for examples.";
+  return "🚀 MART | AI Research & Marketing Studio\n\nChoose a tool below or type a command.\n\n🔎 Research & recommendations\n📣 Marketing, ads, social and video drafts\n🛍 Affiliate research (verified catalog + evidence)\n🚀 Campaign preparation and review\n📈 /metrics — usage & cost ledger\n\n🔒 Research mode: no automatic publishing or live campaign delivery.\nUse /help for examples.";
 }
-const help = "MART Research Bot\n/start — open menu\n/menu — show tools\n/research <topic> — research (requires Python service)\n/recommend <topic> — recommendations (requires Python service)\n/status — staging status\n/help — commands";
+const help = "MART Research Bot — commands\n\n🔎 /research <topic> — source-backed web research\n📊 /recommend <topic> — evidence + initial signal score (0–100)\n🚀 /campaign <topic> — queue a campaign for review\n   /campaignstatus <id> — check a queued campaign\n📣 /marketing <topic> — marketing plan outline\n🎯 /ads <topic> — advertisement copy draft\n📱 /social <topic> — social content draft\n🎬 /video <topic> — short-video script draft\n🛍 /affiliate <topic> — verified offers + market evidence\n⚙️ /status — service configuration\n📈 /metrics — usage & cost ledger (also /usage /quality /agentstatus /report)\n❓ /help — this list\n\n🔒 Research mode: no automatic publishing or live campaign delivery.";
 function response(body,status=200){return new Response(JSON.stringify(body),{status,headers:{"content-type":"application/json; charset=utf-8","cache-control":"no-store"}});}
 function safeEqual(a,b) {
   if(typeof a!=="string"||typeof b!=="string"||!a||!b) return false;

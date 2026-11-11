@@ -44,8 +44,9 @@ def menu_text():
         "Choose a tool below or type a command.\n\n"
         "🔎 Research & recommendations\n"
         "📣 Marketing, ads, social and video drafts\n"
-        "🛍 Affiliate research\n"
-        "🚀 Campaign preparation and review\n\n"
+        "🛍 Affiliate research (verified catalog + evidence)\n"
+        "🚀 Campaign preparation and review\n"
+        "📈 /metrics — usage & cost ledger\n\n"
         "🔒 Research mode: no automatic publishing or live campaign delivery.\n"
         "Use /help for examples."
     )

@@ -2,7 +2,7 @@
 import os
 import httpx
 from fastapi import FastAPI, Header, HTTPException, Request
-from mart_engine import research
+from mart_engine import research, recommend, affiliate_brief
 from telegram_ui import ACTIONS, keyboard, menu_text
 from observability import record, report
 import campaigns
@@ -11,11 +11,20 @@ import time
 
 app = FastAPI(title="MART Agentic Research")
 
-HELP = ("MART Research Bot\n"
-        "/research <topic> — source-backed web research\n"
-        "/recommend <topic> — evidence and recommendation brief\n"
-        "/status — service configuration status\n"
-        "/help — commands")
+HELP = ("MART Research Bot — commands\n\n"
+        "🔎 /research <topic> — source-backed web research\n"
+        "📊 /recommend <topic> — evidence + initial signal score (0–100)\n"
+        "🚀 /campaign <topic> — queue a campaign for review\n"
+        "   /campaignstatus <id> — check a queued campaign\n"
+        "📣 /marketing <topic> — marketing plan outline\n"
+        "🎯 /ads <topic> — advertisement copy draft\n"
+        "📱 /social <topic> — social content draft\n"
+        "🎬 /video <topic> — short-video script draft\n"
+        "🛍 /affiliate <topic> — verified offers + market evidence\n"
+        "⚙️ /status — service configuration\n"
+        "📈 /metrics — agent usage & cost ledger (also /usage /quality /agentstatus /report)\n"
+        "❓ /help — this list\n\n"
+        "🔒 Research mode: no automatic publishing or live campaign delivery.")
 
 async def send_message(chat_id, message, menu=False):
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
@@ -85,7 +94,7 @@ async def telegram_webhook(request: Request, x_telegram_bot_api_secret_token: st
             answer = "Send the product or business topic to start a campaign."
     elif cmd == "/campaignstatus":
         row = campaigns.get(arg.strip(), chat_id)
-        answer = f"Campaign {arg.strip()}: {row[0]}\\n{row[1][:3200]}" if row else "Campaign not found."
+        answer = f"Campaign {arg.strip()}: {row[0]}\n{row[1][:3200]}" if row else "Campaign not found."
     elif not content.startswith("/"):
         cid = campaigns.consume_and_create(chat_id, message.get("from", {}).get("id"), content, uid)
         answer = f"Campaign queued: {cid}. Use /campaignstatus {cid} to check." if cid else HELP
@@ -93,7 +102,7 @@ async def telegram_webhook(request: Request, x_telegram_bot_api_secret_token: st
         answer = menu_text()
     elif cmd == "/help":
         answer = HELP
-    elif cmd in ("/usage", "/quality", "/agentstatus", "/report"):
+    elif cmd in ("/usage", "/quality", "/agentstatus", "/report", "/metrics"):
         answer = report()
     elif cmd == "/status":
         answer = "Service online. Research provider: " + ("configured" if os.getenv("BRAVE_SEARCH_API_KEY") else "missing")
@@ -101,7 +110,7 @@ async def telegram_webhook(request: Request, x_telegram_bot_api_secret_token: st
         kind = cmd.lstrip("/")
         if not arg.strip():
             answer = "Use /" + kind + " followed by a product or topic."
-        elif kind in ("research", "recommend", "affiliate"):
+        elif kind == "research":
             started = time.monotonic()
             try:
                 answer = await research(arg.strip())
@@ -109,10 +118,26 @@ async def telegram_webhook(request: Request, x_telegram_bot_api_secret_token: st
             except Exception as exc:
                 record("research", provider="brave", status="failed", latency_ms=int((time.monotonic()-started)*1000), error_type=type(exc).__name__)
                 raise
+        elif kind == "recommend":
+            started = time.monotonic()
+            try:
+                answer = await recommend(arg.strip())
+                record("recommend", provider="brave", status="ok" if not answer.startswith(("Research unavailable", "Research provider not configured")) else "failed", latency_ms=int((time.monotonic()-started)*1000))
+            except Exception as exc:
+                record("recommend", provider="brave", status="failed", latency_ms=int((time.monotonic()-started)*1000), error_type=type(exc).__name__)
+                raise
+        elif kind == "affiliate":
+            started = time.monotonic()
+            try:
+                answer = await affiliate_brief(arg.strip(), os.getenv("MART_AFFILIATE_DB", "mart_offers.sqlite3"))
+                record("affiliate", provider="brave+catalog", status="ok" if not answer.startswith(("Research unavailable", "Research provider not configured")) else "failed", latency_ms=int((time.monotonic()-started)*1000))
+            except Exception as exc:
+                record("affiliate", provider="brave+catalog", status="failed", latency_ms=int((time.monotonic()-started)*1000), error_type=type(exc).__name__)
+                raise
         else:
             answer = create_draft(kind, arg.strip())
     elif cmd in ("/research", "/recommend"):
-        answer = await research(arg.strip()) if arg.strip() else "Usage: " + cmd + " <topic>"
+        answer = await (research if cmd == "/research" else recommend)(arg.strip()) if arg.strip() else "Usage: " + cmd + " <topic>"
     else:
         answer = HELP
     update_journal.prepare(uid, generation, chat_id, answer)
@@ -147,7 +172,7 @@ async def answer_callback(callback, send=True, acknowledge=True, select_session=
                 campaigns.select(chat_id, user_id, "campaign")
             message = "Send a product or business topic to create a campaign."
     elif kind in ACTIONS:
-        message = f"Selected: {ACTIONS[kind][0]}\\nEnter /{kind} followed by your topic."
+        message = f"Selected: {ACTIONS[kind][0]}\nEnter /{kind} followed by your topic."
     elif data == "status":
         message = "Service online. Research provider: " + ("configured" if os.getenv("BRAVE_SEARCH_API_KEY") else "missing")
     elif data == "help":
