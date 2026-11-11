@@ -3,6 +3,7 @@ import os
 import httpx
 from fastapi import FastAPI, Header, HTTPException, Request
 from mart_engine import research, recommend, affiliate_brief
+from drafts import create_draft
 from telegram_ui import ACTIONS, keyboard, menu_text
 from observability import record, report
 import campaigns
@@ -246,15 +247,18 @@ async def telegram_webhook(request: Request, x_telegram_bot_api_secret_token: st
     if update_journal.begin_delivery(uid, generation):
         await send_message(chat_id, answer, menu=True)
         update_journal.delivered(uid, generation)
-    return {"ok": True}
+    return {"ok": True, "answer": (answer or "")[:400]}
 
 async def acknowledge_callback(callback):
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
     if not token:
         raise RuntimeError("TELEGRAM_BOT_TOKEN missing")
     async with httpx.AsyncClient(timeout=10) as client:
-        r = await client.post(f"https://api.telegram.org/bot{token}/answerCallbackQuery", json={"callback_query_id": callback["id"]})
-        r.raise_for_status()
+        try:
+            r = await client.post(f"https://api.telegram.org/bot{token}/answerCallbackQuery", json={"callback_query_id": callback["id"]})
+            r.raise_for_status()
+        except httpx.HTTPStatusError:
+            pass  # already-answered/old query: non-fatal, update still handled
 
 async def answer_callback(callback, send=True, acknowledge=True, select_session=True):
     if acknowledge:
@@ -284,14 +288,3 @@ async def answer_callback(callback, send=True, acknowledge=True, select_session=
     if send:
         await send_message(chat_id, message, menu=True)
     return message
-
-def create_draft(kind, topic):
-    topic = topic[:250]
-    templates = {
-        "marketing": "Define audience, positioning, two channels, test budget, conversion goal, and weekly review.",
-        "ads": "Headline: Explore {topic}. Copy: Compare available options and learn what fits your needs. CTA: Learn more. Verify claims before publishing.",
-        "social": "Post idea: Three considerations when choosing {topic}. Invite feedback and disclose affiliate relationships.",
-        "video": "Vertical video: 0-3s hook; 3-12s problem; 12-25s three tips; 25-35s CTA. Use licensed media."
-    }
-    template = templates.get(kind, "Research affiliate products, disclose partnerships, and verify product claims.")
-    return f"{kind.upper()} — {topic}\n\n" + template.replace("{topic}", topic)
