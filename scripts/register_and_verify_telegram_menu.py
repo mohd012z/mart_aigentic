@@ -11,8 +11,9 @@ async def main():
     token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
     if not re.fullmatch(r"[0-9]+:[A-Za-z0-9_-]+", token):
         raise RuntimeError("Missing or malformed TELEGRAM_BOT_TOKEN")
-    if len(COMMANDS) != 13 or len({c["command"] for c in COMMANDS}) != 13:
-        raise RuntimeError("Expected exactly 13 distinct commands")
+    expected = len(COMMANDS)
+    if expected != len({c["command"] for c in COMMANDS}):
+        raise RuntimeError("Commands are not distinct")
     for item in COMMANDS:
         if not re.fullmatch(r"[a-z0-9_]{1,32}", item["command"]):
             raise RuntimeError("Invalid command")
@@ -32,8 +33,8 @@ async def main():
         except (httpx.HTTPError, ValueError):
             raise RuntimeError("Telegram registration/verification request failed") from None
     if actual != COMMANDS:
-        raise RuntimeError("Registered command list does not match all 13 expected commands")
-    print("PASS: Telegram confirmed exact parity for 13 MART commands.")
+        raise RuntimeError("Registered command list does not match all expected commands")
+    print(f"PASS: Telegram confirmed exact parity for {expected} MART commands.")
 
 if __name__ == "__main__":
     try:

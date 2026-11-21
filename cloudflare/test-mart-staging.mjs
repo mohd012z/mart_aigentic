@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import worker,{COMMANDS,keyboard,render} from "./mart-staging-worker.mjs";
 const env={TELEGRAM_WEBHOOK_SECRET:"test-secret",STAGING_ENABLE_DELIVERY:"false"};
 const req=(payload,secret="test-secret",path="/telegram/webhook")=>new Request("https://staging.example"+path,{method:"POST",headers:{"content-type":"application/json","X-Telegram-Bot-Api-Secret-Token":secret},body:JSON.stringify(payload)});
-test("13 commands and 11 inline buttons",()=>{assert.equal(COMMANDS.length,13);assert.equal(new Set(COMMANDS).size,13);assert.equal(keyboard().inline_keyboard.flat().length,11);});
+test("15 commands and 13 inline buttons",()=>{assert.equal(COMMANDS.length,15);assert.equal(new Set(COMMANDS).size,15);assert.equal(keyboard().inline_keyboard.flat().length,13);});
 test("start preview never calls Telegram",async()=>{const r=await worker.fetch(req({update_id:1,message:{chat:{id:123},text:"/start"}}),env);assert.equal(r.status,200);assert.equal((await r.json()).preview,true);});
 test("callback preview",async()=>{const r=await worker.fetch(req({update_id:2,callback_query:{id:"abc",data:"action:research",message:{chat:{id:123}}}}),env);assert.equal((await r.json()).preview,true);});
 test("wrong secret",async()=>{assert.equal((await worker.fetch(req({update_id:3},"bad"),env)).status,403);});

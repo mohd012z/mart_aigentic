@@ -6,7 +6,7 @@ import httpx
 
 METHODS = ("getMe", "getWebhookInfo", "getMyCommands")
 EXPECTED_USERNAME = "mart_aigenticbot"
-EXPECTED_COMMANDS = frozenset(("start", "menu", "campaign", "campaignstatus", "research", "recommend", "marketing", "ads", "social", "video", "affiliate", "status", "help"))
+EXPECTED_COMMANDS = frozenset(("start", "menu", "campaign", "campaignstatus", "research", "recommend", "marketing", "ads", "social", "video", "affiliate", "forexbonus", "forexa", "status", "help"))
 
 
 def classify_error(message):

@@ -36,7 +36,7 @@ class DiagnosticTests(unittest.TestCase):
 
     def test_missing_commands(self):
         result = summarize("getMyCommands", {"ok": True, "result": [{"command": "start"}]})
-        self.assertEqual(len(result["missing_commands"]), 12)
+        self.assertEqual(len(result["missing_commands"]), 14)
 
     def test_malformed_payload(self):
         self.assertFalse(summarize("getWebhookInfo", {"ok": True, "result": []})["ok"])

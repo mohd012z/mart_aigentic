@@ -1,9 +1,10 @@
 // Staging-only Telegram webhook adapter. No campaign creation, publishing or registration.
-export const COMMANDS = ["start","menu","campaign","campaignstatus","research","recommend","marketing","ads","social","video","affiliate","status","help"];
+export const COMMANDS = ["start","menu","campaign","campaignstatus","research","recommend","marketing","ads","social","video","affiliate","forexbonus","forexa","status","help"];
 const actions = [
   ["campaign","🚀 Campaign"],["research","🔎 Research"],["recommend","📊 Recommendations"],
   ["marketing","📣 Marketing"],["ads","🎯 Ads Creator"],["social","📱 Social Posts"],
-  ["video","🎬 Video Script"],["affiliate","🛍 Affiliate"]
+  ["video","🎬 Video Script"],["affiliate","🛍 Affiliate"],
+  ["forexbonus","💵 Forex No-Deposit Bonus"],["forexa","🔗 Forex Affiliate Links"]
 ];
 export function keyboard() {
   const rows = [];
@@ -14,9 +15,9 @@ export function keyboard() {
   return {inline_keyboard:rows};
 }
 export function menuText() {
-  return "🚀 MART | AI Research & Marketing Studio\n\nChoose a tool below or type a command.\n\n🔎 Research & recommendations\n📣 Marketing, ads, social and video drafts\n🛍 Affiliate research\n🚀 Campaign preparation and review\n\n🔒 Research mode: no automatic publishing or live campaign delivery.\nUse /help for examples.";
+  return "🚀 MART | AI Research & Marketing Studio\n\nChoose a tool below or type a command.\n\n🔎 Research & recommendations\n📣 Marketing, ads, social and video drafts\n🛍 Affiliate research (verified catalog + evidence)\n🚀 Campaign preparation and review\n💵 Forex no-deposit bonus list + 📇 affiliate links\n📈 /metrics — usage & cost ledger\n\n🔒 Research mode: no automatic publishing or live campaign delivery.\nUse /help for examples.";
 }
-const help = "MART Research Bot\n/start — open menu\n/menu — show tools\n/research <topic> — research (requires Python service)\n/recommend <topic> — recommendations (requires Python service)\n/status — staging status\n/help — commands";
+const help = "MART Research Bot — commands\n\n🔎 /research <topic> — source-backed web research\n📊 /recommend <topic> — evidence + initial signal score (0–100)\n🚀 /campaign <topic> — queue a campaign for review\n   /campaignstatus <id> — check a queued campaign\n📣 /marketing <topic> — marketing plan outline\n🎯 /ads <topic> — advertisement copy draft\n📱 /social <topic> — social content draft\n🎬 /video <topic> — short-video script draft\n🛍 /affiliate <topic> — verified offers + market evidence\n💵 /forexbonus — list all current forex no-deposit bonuses\n🔗 /forexa list|add <name> <url>|share <name>|remove <name>\n⚙️ /status — service configuration\n📈 /metrics — usage & cost ledger (also /usage /quality /agentstatus /report)\n❓ /help — this list\n\n🔒 Research mode: no automatic publishing or live campaign delivery.";
 function response(body,status=200){return new Response(JSON.stringify(body),{status,headers:{"content-type":"application/json; charset=utf-8","cache-control":"no-store"}});}
 function safeEqual(a,b) {
   if(typeof a!=="string"||typeof b!=="string"||!a||!b) return false;
@@ -48,7 +49,7 @@ export function render(update) {
   if(command==="/start"||command==="/menu") return {chatId,text:menuText()};
   if(command==="/help") return {chatId,text:help};
   if(command==="/status") return {chatId,text:"MART staging adapter online. Research and campaign execution disabled."};
-  if(command==="/campaign"||command==="/campaignstatus"||command==="/research"||command==="/recommend"||command==="/marketing"||command==="/ads"||command==="/social"||command==="/video"||command==="/affiliate")
+  if(command==="/campaign"||command==="/campaignstatus"||command==="/research"||command==="/recommend"||command==="/marketing"||command==="/ads"||command==="/social"||command==="/video"||command==="/affiliate"||command==="/forexbonus"||command==="/forexa")
     return {chatId,text:"This staging adapter displays the menu only. The Python service is required for this command."};
   return {chatId,text:help};
 }
