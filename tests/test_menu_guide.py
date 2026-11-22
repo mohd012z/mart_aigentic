@@ -97,6 +97,44 @@ class GuideWebhookTests(unittest.TestCase):
         self.assertIn("MARKETING PLAN", text)
         self.assertNotIn("deep dive", text)
 
+    def test_contentlab_offline_returns_labelled_package(self):
+        os.environ.pop("MART_LLM_API_KEY", None)
+        with patch.object(app, "send_message", new_callable=AsyncMock) as send:
+            self.assertEqual(self.post("/contentlab solar panels for homes").status_code, 200)
+            text = send.await_args.args[1]
+        self.assertIn("CONTENT LAB — solar panels for homes", text)
+        self.assertIn("SCRIPT", text)
+        self.assertIn("HASHTAGS", text)
+        self.assertIn("STOCK TERMS", text)
+        self.assertIn("script=offline_template", text)
+        self.assertIn("Nothing published", text)
+        self.assertLessEqual(len(text), 4096)
+
+    def test_contentlab_platform_token_is_consumed(self):
+        os.environ.pop("MART_LLM_API_KEY", None)
+        with patch.object(app, "send_message", new_callable=AsyncMock) as send:
+            self.assertEqual(self.post("/contentlab solar panels instagram_reels").status_code, 200)
+            text = send.await_args.args[1]
+        self.assertIn("Instagram Reels", text)
+        self.assertNotIn("tiktok", text.lower())
+
+    def test_contentlab_bare_platform_word_stays_topic(self):
+        os.environ.pop("MART_LLM_API_KEY", None)
+        with patch.object(app, "send_message", new_callable=AsyncMock) as send:
+            self.assertEqual(self.post("/contentlab tiktok").status_code, 200)
+            text = send.await_args.args[1]
+        # single token is the topic, platform stays the default
+        self.assertIn("CONTENT LAB — tiktok", text)
+        self.assertIn("TikTok", text)
+
+    def test_contentlab_no_arg_returns_deep_dive(self):
+        with patch.object(app, "send_message", new_callable=AsyncMock) as send:
+            self.assertEqual(self.post("/contentlab").status_code, 200)
+            text = send.await_args.args[1]
+        self.assertTrue(text.startswith("Selected: 🎥 Content Lab"))
+        self.assertIn("deep dive", text)
+        self.assertIn("/contentlab <topic>", text)
+
     def test_noarg_campaign_selects_session_and_returns_guide(self):
         with patch.object(app, "send_message", new_callable=AsyncMock) as send:
             self.assertEqual(self.post("/campaign").status_code, 200)

@@ -10,6 +10,7 @@ COMMANDS = [
     {"command": "ads", "description": "Draft advertisement copy"},
     {"command": "social", "description": "Draft social media content"},
     {"command": "video", "description": "Draft short-video script"},
+    {"command": "contentlab", "description": "Content lab: video script + social copy + stock terms"},
     {"command": "affiliate", "description": "Research affiliate products"},
     {"command": "forexbonus", "description": "List all current forex no-deposit bonuses"},
     {"command": "forexa", "description": "Store/list/share forex affiliate links (forexa add <name> <url>)"},
@@ -24,6 +25,7 @@ ACTIONS = {
     "ads": ("🎯 Ads Creator", "Advertising draft"),
     "social": ("📱 Social Posts", "Social content"),
     "video": ("🎬 Video Script", "Short-video script"),
+    "contentlab": ("🎥 Content Lab", "Script + social copy + stock terms"),
     "affiliate": ("🛍 Affiliate", "Affiliate research"),
     "forexbonus": ("💵 Forex No-Deposit Bonus", "Forex bonus list"),
     "forexa": ("🔗 Forex Affiliate Links", "Forex affiliate links"),
@@ -48,6 +50,7 @@ def menu_text():
         "Choose a tool below or type a command.\n\n"
         "🔎 Research & recommendations\n"
         "📣 Marketing, ads, social and video drafts\n"
+        "🎥 /contentlab — video script + title/caption/hashtags + stock terms\n"
         "🛍 Affiliate research (verified catalog + evidence)\n"
         "🚀 Campaign preparation and review\n"
         "📈 /metrics — usage & cost ledger\n"

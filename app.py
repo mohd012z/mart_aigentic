@@ -9,6 +9,7 @@ from telegram_ui import ACTIONS, keyboard, menu_text
 from observability import record, report
 import campaigns
 import update_journal
+import contentlab
 import time
 
 app = FastAPI(title="MART Agentic Research")
@@ -22,6 +23,7 @@ HELP = ("MART Research Bot — commands\n\n"
         "🎯 /ads <topic> — advertisement copy draft\n"
         "📱 /social <topic> — social content draft\n"
         "🎬 /video <topic> — short-video script draft\n"
+        "🎥 /contentlab <topic> [platform] — script + title/caption + hashtags + stock terms\n"
         "🛍 /affiliate <topic> — verified offers + market evidence\n"
         "⚙️ /status — service configuration\n"
         "📈 /metrics — agent usage & cost ledger (also /usage /quality /agentstatus /report)\n"
@@ -61,6 +63,24 @@ def render_bonus_list(db):
                      f"Valid: {validity} · verified {b['verified_at']}\n   {b['source_url']}")
     lines.append("\n" + forex_bonuses.DISCLAIMER)
     return "\n".join(lines)[:3900]
+
+def _contentlab_response(arg):
+    """/contentlab <topic> [platform] -> (message, stage labels).
+
+    The trailing token is treated as a platform only when it is a known
+    platform key; otherwise the whole argument is the topic.
+    """
+    parts = [p for p in arg.split() if p]
+    platform = contentlab.DEFAULT_PLATFORM
+    if parts and parts[-1].lower() in contentlab.SOCIAL_PLATFORMS and len(parts) > 1:
+        platform = parts[-1].lower()
+        parts = parts[:-1]
+    topic = " ".join(parts)
+    if not topic:
+        raise ValueError("Use /contentlab <topic> [platform] — e.g. /contentlab solar panels tiktok.")
+    text, labels = contentlab.generate_content_package(topic, platform)
+    header = ("Content Lab — " + contentlab.SOCIAL_PLATFORMS[platform]["label"] + "\n\n")
+    return (header + text).strip(), labels
 
 def render_forexa(db, chat_id, text=""):
     import affiliate_catalog
@@ -211,6 +231,20 @@ async def telegram_webhook(request: Request, x_telegram_bot_api_secret_token: st
                                                 "Open the private chat, then use /forexa list.")
         else:
             answer = (guide("forexa") or "") + "\n\n" + render_forexa(db, chat_id, arg)
+    elif cmd == "/contentlab":
+        if not arg.strip():
+            answer = guide("contentlab")
+        else:
+            started = time.monotonic()
+            try:
+                answer, labels = _contentlab_response(arg)
+            except ValueError as exc:
+                answer, labels = str(exc), {}
+            record("contentlab", provider="llm" if labels.get("script") == "llm" else "offline",
+                   status="ok" if labels else "failed",
+                   latency_ms=int((time.monotonic() - started) * 1000),
+                   source_count=1 if labels else 0,
+                   error_type="" if labels else "InvalidTopic")
     elif cmd.lstrip("/") in ACTIONS:
         kind = cmd.lstrip("/")
         if not arg.strip():
