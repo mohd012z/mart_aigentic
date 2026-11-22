@@ -40,7 +40,7 @@ export function render(update) {
     if(data==="status") return {chatId,text:"MART staging adapter online. Research and campaign execution disabled.",callbackId:callback.id};
     if(typeof data==="string"&&data.startsWith("action:")) {
       const kind=data.slice(7);
-      if(actions.some(([k])=>k===kind)) return {chatId,text:kind==="campaign"?"Campaign creation requires the Python service. No campaign was created.":`Selected: ${actions.find(([k])=>k===kind)[1]}\nEnter /${kind} followed by your topic in the Python service.`,callbackId:callback.id};
+      if(actions.some(([k])=>k===kind)) return {chatId,text:kind==="campaign"?"Campaign creation requires the Python service. No campaign was created.\nStaging preview — the Python service returns the full campaign guide.":`Selected: ${actions.find(([k])=>k===kind)[1]} — deep dive\n\nStaging preview — the Python service returns the full guide with examples.`,callbackId:callback.id};
     }
     return {chatId,text:menuText(),callbackId:callback.id};
   }

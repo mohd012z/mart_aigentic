@@ -4,6 +4,7 @@ import httpx
 from fastapi import FastAPI, Header, HTTPException, Request
 from mart_engine import research, recommend, affiliate_brief
 from drafts import create_draft
+from menu_guide import guide
 from telegram_ui import ACTIONS, keyboard, menu_text
 from observability import record, report
 import campaigns
@@ -180,7 +181,7 @@ async def telegram_webhook(request: Request, x_telegram_bot_api_secret_token: st
             answer = f"Campaign queued: {cid}. Use /campaignstatus {cid} to check. Publishing requires approval."
         else:
             campaigns.select(chat_id, message.get("from", {}).get("id"), "campaign")
-            answer = "Send the product or business topic to start a campaign."
+            answer = guide("campaign")
     elif cmd == "/campaignstatus":
         row = campaigns.get(arg.strip(), chat_id)
         answer = f"Campaign {arg.strip()}: {row[0]}\n{row[1][:3200]}" if row else "Campaign not found."
@@ -199,20 +200,21 @@ async def telegram_webhook(request: Request, x_telegram_bot_api_secret_token: st
         import forex_bonuses
         db = os.getenv("MART_BONUS_DB", "mart_bonuses.sqlite3")
         forex_bonuses.seed(db)
-        answer = render_bonus_list(db)
+        answer = (guide("forexbonus") or "") + "\n\n" + render_bonus_list(db)
     elif cmd == "/forexa":
         db = os.getenv("MART_AFFILIATE_DB", "mart_offers.sqlite3")
         ensure_affiliate_seed(db)
         from_user = message.get("from", {}).get("id")
         chat_type = (message.get("chat") or {}).get("type")
         if chat_type != "private" or not from_user or from_user != chat_id:
-            answer = "Forex affiliate links are stored per private chat only. Use /forexa in your private chat with the bot."
+            answer = (guide("forexa") or "") + ("\n\n📇 Your links open in your private chat with the bot.\n"
+                                                "Open the private chat, then use /forexa list.")
         else:
-            answer = render_forexa(db, chat_id, arg)
+            answer = (guide("forexa") or "") + "\n\n" + render_forexa(db, chat_id, arg)
     elif cmd.lstrip("/") in ACTIONS:
         kind = cmd.lstrip("/")
         if not arg.strip():
-            answer = "Use /" + kind + " followed by a product or topic."
+            answer = guide(kind) or ("Use /" + kind + " followed by a product or topic.")
         elif kind == "research":
             started = time.monotonic()
             try:
@@ -272,13 +274,14 @@ async def answer_callback(callback, send=True, acknowledge=True, select_session=
         user_id = (callback.get("from") or {}).get("id")
         chat_type = ((callback.get("message") or {}).get("chat") or {}).get("type")
         if chat_type != "private" or not user_id or user_id != chat_id:
-            message = "Campaign creation is available in your private chat only."
+            message = ("Campaign creation is available in your private chat only.\n"
+                       "Open the chat with the bot, tap 🚀 Campaign and send the topic.")
         else:
             if select_session:
                 campaigns.select(chat_id, user_id, "campaign")
-            message = "Send a product or business topic to create a campaign."
+            message = guide("campaign")
     elif kind in ACTIONS:
-        message = f"Selected: {ACTIONS[kind][0]}\nEnter /{kind} followed by your topic."
+        message = guide(kind) or ("Selected: " + ACTIONS[kind][0] + "\nEnter /" + kind + " followed by your topic.")
     elif data == "status":
         message = "Service online. Research provider: " + ("configured" if os.getenv("BRAVE_SEARCH_API_KEY") else "missing")
     elif data == "help":
