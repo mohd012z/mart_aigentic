@@ -10,6 +10,7 @@ from observability import record, report
 import campaigns
 import update_journal
 import contentlab
+import promptlab
 import time
 
 app = FastAPI(title="MART Agentic Research")
@@ -24,6 +25,7 @@ HELP = ("MART Research Bot — commands\n\n"
         "📱 /social <topic> — social content draft\n"
         "🎬 /video <topic> — short-video script draft\n"
         "🎥 /contentlab <topic> [platform] — script + title/caption + hashtags + stock terms\n"
+        "🧠 /prompt <name|topic> — complete self-contained prompts for any AI (en|bm)\n"
         "🛍 /affiliate <topic> — verified offers + market evidence\n"
         "⚙️ /status — service configuration\n"
         "📈 /metrics — agent usage & cost ledger (also /usage /quality /agentstatus /report)\n"
@@ -245,6 +247,24 @@ async def telegram_webhook(request: Request, x_telegram_bot_api_secret_token: st
                    latency_ms=int((time.monotonic() - started) * 1000),
                    source_count=1 if labels else 0,
                    error_type="" if labels else "InvalidTopic")
+    elif cmd == "/prompt":
+        if not arg.strip():
+            answer = guide("prompt")
+        else:
+            started = time.monotonic()
+            parts = [p for p in arg.split() if p]
+            lang = promptlab.DEFAULT_LANG
+            if parts[-1].lower() in promptlab.LANGS and len(parts) > 1:
+                lang = parts[-1].lower()
+                parts = parts[:-1]
+            key = parts[0].lower() if parts else ""
+            if key in promptlab.TEMPLATES:
+                topic = " ".join(parts[1:])
+            else:
+                key, topic = "generic", " ".join(parts)
+            answer = promptlab.build_response(key, topic, lang)
+            record("prompt", provider="offline", status="ok",
+                   latency_ms=int((time.monotonic() - started) * 1000), source_count=1)
     elif cmd.lstrip("/") in ACTIONS:
         kind = cmd.lstrip("/")
         if not arg.strip():

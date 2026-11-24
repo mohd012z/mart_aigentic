@@ -26,6 +26,8 @@ class GuideContentTests(unittest.TestCase):
             "ads": ("headlines", "Meta", "Google", "TikTok", "A/B"),
             "social": ("7-day", "D1 hook", "Malay", "one-line question"),
             "video": ("30s", "60s", "0–3s hook", "9:16", "SRT"),
+            "contentlab": ("SCRIPT", "STOCK TERMS", "SOURCES", "offline"),
+            "prompt": ("COMPLETE", "ROLE", "VERIFY", "agent", "bm"),
             "affiliate": ("VERIFIED CATALOG", "disclosure", "/forexa add"),
             "forexbonus": ("validity", "lead, not an offer", "source URL"),
             "forexa": ("/forexa add", "/forexa share", "/forexa remove", "https"),
