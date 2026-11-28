@@ -9,3 +9,11 @@ STAGING_ENABLE_DELIVERY = "true"
 # No routes, cron, D1, KV, or production bindings.
 # TELEGRAM_WEBHOOK_SECRET and TELEGRAM_BOT_TOKEN are secrets, never TOML values.
 # No webhook registration is performed by this Worker.
+
+[[durable_objects.bindings]]
+name = "START_JOBS"
+class_name = "StartJob"
+
+[[migrations]]
+tag = "v1-start-jobs"
+new_sqlite_classes = ["StartJob"]

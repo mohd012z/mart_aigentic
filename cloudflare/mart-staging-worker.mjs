@@ -57,10 +57,57 @@ async function telegram(token,method,payload) {
   const r=await fetch("https://api.telegram.org/bot"+token+"/"+method,{
     method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(payload)
   });
+  if (r.status === 429) throw new TelegramRateLimit();
   if(!r.ok) throw new Error("Telegram "+method+" HTTP "+r.status);
   const json=await r.json();
   if(json.ok!==true) throw new Error("Telegram "+method+" rejected request");
 }
+class TelegramRateLimit extends Error {}
+
+// One object per bot and /start update. The saved payload wins on replay.
+export class StartJob {
+  constructor(ctx, env) {
+    this.storage = ctx.storage;
+    this.env = env;
+    this.storage.sql.exec(`CREATE TABLE IF NOT EXISTS job (
+      id INTEGER PRIMARY KEY CHECK (id = 1), status TEXT NOT NULL, payload TEXT
+    )`);
+  }
+
+  async fetch(request) {
+    const payload = await request.text();
+    if (!this.active) {
+      this.active = this.deliver(payload).finally(() => { this.active = undefined; });
+    }
+    const status = await this.active;
+    return response(status === 200 ? {ok:true} : {error:"start_delivery_pending"}, status);
+  }
+
+  async deliver(payload) {
+    const sql = this.storage.sql;
+    sql.exec("INSERT OR IGNORE INTO job VALUES (1, 'pending', ?)", payload);
+    await this.storage.sync();
+    const [job] = sql.exec("SELECT status, payload FROM job WHERE id=1").toArray();
+    if (job.status === "done") return 200;
+    // A previous process may have sent this message before losing the receipt.
+    if (job.status === "sending") return 503;
+    sql.exec("UPDATE job SET status='sending' WHERE id=1");
+    await this.storage.sync();
+    try {
+      await telegram(this.env.TELEGRAM_BOT_TOKEN, "sendMessage", JSON.parse(job.payload));
+    } catch (error) {
+      if (error instanceof TelegramRateLimit) {
+        sql.exec("UPDATE job SET status='pending' WHERE id=1");
+        await this.storage.sync();
+      }
+      return 503;
+    }
+    sql.exec("UPDATE job SET status='done', payload=NULL WHERE id=1");
+    await this.storage.sync();
+    return 200;
+  }
+}
+
 export default {
   async fetch(request,env) {
     const url=new URL(request.url);
@@ -81,6 +128,15 @@ export default {
     if(env.STAGING_ENABLE_DELIVERY!=="true") return response({ok:true,preview:true,command:reply.text.slice(0,100)});
     if(!env.TELEGRAM_BOT_TOKEN) return response({error:"missing_token"},503);
     try {
+      const command = update.message?.text?.trim().split(/\s+/,1)[0].split("@",1)[0].toLowerCase();
+      if (!reply.callbackId && command === "/start") {
+        if (!env.START_JOBS) return response({error:"missing_job_store"},503);
+        const botId = env.TELEGRAM_BOT_TOKEN.split(":",1)[0];
+        const id = env.START_JOBS.idFromName(botId + ":" + update.update_id);
+        return await env.START_JOBS.get(id).fetch("https://job/start", {
+          method:"POST", body:JSON.stringify({chat_id:reply.chatId,text:reply.text,reply_markup:keyboard(),disable_web_page_preview:true})
+        });
+      }
       if(reply.callbackId) await telegram(env.TELEGRAM_BOT_TOKEN,"answerCallbackQuery",{callback_query_id:reply.callbackId});
       await telegram(env.TELEGRAM_BOT_TOKEN,"sendMessage",{chat_id:reply.chatId,text:reply.text,reply_markup:keyboard(),disable_web_page_preview:true});
     } catch {return response({error:"delivery_failed"},502);}
