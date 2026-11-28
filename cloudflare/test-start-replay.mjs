@@ -60,3 +60,41 @@ test("a saved /start survives restart and concurrent webhook replay", async t =>
   assert.deepEqual(calls[0].reply_markup, adapter.keyboard());
   assert.deepEqual(db.prepare("SELECT status FROM job").all().map(row => row.status), ["done"]);
 });
+
+test("expired callback, rate limit and uncertain receipt survive job recreation", async t => {
+  const db = new DatabaseSync(":memory:");
+  t.after(() => db.close());
+  const storage = {sql:{exec(query,...args) {
+    const rows = db.prepare(query).all(...args);
+    return {toArray:() => rows};
+  }},async sync() {}};
+  const methods = [];
+  let now = 100000;
+  t.mock.method(Date, "now", () => now);
+  let sends = 0;
+  t.mock.method(globalThis, "fetch", async url => {
+    const method = new URL(url).pathname.split("/").pop();
+    methods.push(method);
+    if (method === "answerCallbackQuery") return Response.json({ok:false},{status:400});
+    if (++sends === 1) return Response.json({parameters:{retry_after:10}},{status:429});
+    throw new Error("lost receipt");
+  });
+  const env = {TELEGRAM_BOT_TOKEN:"123:fixture",TELEGRAM_WEBHOOK_SECRET:"test",STAGING_ENABLE_DELIVERY:"true",
+    START_JOBS:{idFromName:name=>name,get(name) {
+      assert.equal(name,"123:7");
+      const job = new adapter.StartJob({storage},env);
+      return {fetch:(url,init)=>job.fetch(new Request(url,init))};
+    }}};
+  const replay = () => adapter.default.fetch(new Request("https://fixture/telegram/webhook", {
+    method:"POST", headers:{"content-type":"application/json","X-Telegram-Bot-Api-Secret-Token":"test"},
+    body:JSON.stringify({update_id:7,callback_query:{id:"cb",data:"action:research",message:{chat:{id:42}}}})
+  }),env);
+  assert.equal((await replay()).status,503);
+  now += 9999;
+  assert.equal((await replay()).status,503);
+  assert.equal(sends,1);
+  now += 1;
+  assert.equal((await replay()).status,503);
+  assert.equal((await replay()).status,503);
+  assert.deepEqual(methods,["answerCallbackQuery","sendMessage","answerCallbackQuery","sendMessage"]);
+});
